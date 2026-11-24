@@ -1,11 +1,42 @@
 export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getD1AdminMetrics } from '@/lib/d1';
+import { getRequestContext } from '@cloudflare/next-on-pages';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
+    let d1Binding: any = null;
+    try {
+      d1Binding = (getRequestContext()?.env as any)?.DB;
+    } catch {}
+
+    if (d1Binding) {
+      const metrics = await getD1AdminMetrics(d1Binding);
+      return NextResponse.json({
+        overview: {
+          totalOrders: metrics.totalOrders,
+          todayOrders: metrics.todayOrders,
+          todaySales: 0,
+          totalSales: metrics.totalRevenue,
+          totalProducts: metrics.activeProducts,
+          remainingStock: metrics.totalStock,
+          lowStockCount: 0,
+        },
+        ordersByStatus: {
+          PENDING: 0,
+          CONFIRMED: 0,
+          PREPARING: 0,
+          SHIPPING: 0,
+          COMPLETED: metrics.totalOrders,
+        },
+        topProducts: [],
+        salesLast7Days: [],
+        recentOrders: [],
+      });
+    }
     const now = new Date();
 
     // 1. Time boundaries

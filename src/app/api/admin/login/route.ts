@@ -2,6 +2,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { comparePassword, signAdminToken, verifyAdminToken } from '@/lib/auth';
+import { getRequestContext } from '@cloudflare/next-on-pages';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,11 +45,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const admin = await prisma.admin.findUnique({
-      where: {
-        username: String(username).trim(),
-      },
-    });
+    let admin: any = null;
+    try {
+      const ctx = getRequestContext();
+      if (ctx?.env && (ctx.env as any).DB) {
+        admin = await (ctx.env as any).DB.prepare('SELECT * FROM Admin WHERE username = ?')
+          .bind(String(username).trim())
+          .first();
+      }
+    } catch (err) {
+      console.warn('D1 direct query error in login:', err);
+    }
+
+    if (!admin) {
+      admin = await prisma.admin.findUnique({
+        where: {
+          username: String(username).trim(),
+        },
+      });
+    }
 
     if (!admin) {
       return NextResponse.json(

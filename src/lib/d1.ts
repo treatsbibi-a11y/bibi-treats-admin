@@ -94,7 +94,75 @@ export async function getD1Products(options?: {
   category?: string;
   search?: string;
   status?: 'ACTIVE' | 'INACTIVE' | 'all';
+  d1Binding?: CloudflareD1Binding;
 }): Promise<ProductWithImages[]> {
+  if (options?.d1Binding) {
+    let sql = `
+      SELECT 
+        p.id, p.name, p.description, p.price, p.stock, p.initialStock, p.sold, 
+        p.category, p.status, p.createdAt, p.updatedAt,
+        COALESCE(
+          json_group_array(
+            json_object(
+              'id', pi.id,
+              'productId', pi.productId,
+              'imageUrl', pi.imageUrl,
+              'isPrimary', pi.isPrimary,
+              'displayOrder', pi.displayOrder
+            )
+          ),
+          '[]'
+        ) as images_json
+      FROM Product p
+      LEFT JOIN ProductImage pi ON p.id = pi.productId
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+
+    if (options.status && options.status !== 'all') {
+      sql += ` AND p.status = ?`;
+      params.push(options.status);
+    }
+
+    if (options.category && options.category !== 'All') {
+      sql += ` AND p.category = ?`;
+      params.push(options.category);
+    }
+
+    if (options.search && options.search.trim()) {
+      sql += ` AND (p.name LIKE ? OR p.description LIKE ?)`;
+      params.push(`%${options.search.trim()}%`, `%${options.search.trim()}%`);
+    }
+
+    sql += ` GROUP BY p.id ORDER BY p.createdAt DESC`;
+
+    const stmt = options.d1Binding.prepare(sql).bind(...params);
+    const { results } = await stmt.all<any>();
+
+    return results.map((row: any) => {
+      let images = [];
+      try {
+        images = JSON.parse(row.images_json || '[]').filter((img: any) => img.id !== null);
+      } catch {
+        images = [];
+      }
+      return {
+        id: row.id,
+        name: row.name,
+        description: row.description || '',
+        price: Number(row.price),
+        stock: Number(row.stock),
+        initialStock: Number(row.initialStock),
+        sold: Number(row.sold),
+        category: row.category,
+        status: row.status as 'ACTIVE' | 'INACTIVE',
+        createdAt: new Date(row.createdAt).toISOString(),
+        updatedAt: new Date(row.updatedAt).toISOString(),
+        images: images.sort((a: any, b: any) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
+      };
+    });
+  }
+
   const where: any = {};
   if (options?.status && options.status !== 'all') {
     where.status = options.status;
@@ -139,4 +207,45 @@ export async function getD1Products(options?: {
       displayOrder: img.displayOrder,
     })),
   }));
+}
+
+export async function getD1StoreSettings(d1Binding?: CloudflareD1Binding): Promise<StoreSettingsData | null> {
+  if (d1Binding) {
+    const stmt = d1Binding.prepare(`SELECT * FROM StoreSettings LIMIT 1`);
+    const row = await stmt.bind().first<any>();
+    if (!row) return null;
+
+    return {
+      shopName: row.shopName,
+      tagline: row.tagline,
+      logoUrl: row.logoUrl,
+      qrImageUrl: row.qrImageUrl,
+      promptpayNumber: row.promptpayNumber,
+      promptpayName: row.promptpayName,
+      bankName: row.bankName,
+      bankAccountNo: row.bankAccountNo,
+      bankAccountName: row.bankAccountName,
+      defaultShippingFee: Number(row.defaultShippingFee),
+      isStoreOpen: Boolean(row.isStoreOpen),
+      announcement: row.announcement,
+    };
+  }
+
+  const settings = await prisma.storeSettings.findFirst();
+  if (!settings) return null;
+
+  return {
+    shopName: settings.shopName,
+    tagline: settings.tagline,
+    logoUrl: settings.logoUrl,
+    qrImageUrl: settings.qrImageUrl,
+    promptpayNumber: settings.promptpayNumber,
+    promptpayName: settings.promptpayName,
+    bankName: settings.bankName,
+    bankAccountNo: settings.bankAccountNo,
+    bankAccountName: settings.bankAccountName,
+    defaultShippingFee: settings.defaultShippingFee,
+    isStoreOpen: settings.isStoreOpen,
+    announcement: settings.announcement,
+  };
 }
