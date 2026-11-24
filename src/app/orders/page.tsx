@@ -1017,13 +1017,16 @@ function OrdersContent() {
       {/* 80mm POS THERMAL RECEIPT PREVIEW & PRINT MODAL       */}
       {/* ==================================================== */}
       {viewingReceiptOrder && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-150">
-          <div className="w-full sm:max-w-[420px] h-[92dvh] sm:h-auto sm:max-h-[92vh] flex flex-col bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border-t sm:border border-slate-200/90 relative overflow-hidden animate-in slide-in-from-bottom-8 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
-            {/* Mobile Sheet Handle Pill */}
-            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto my-2 sm:hidden shrink-0 no-print" />
-
+        <div
+          onClick={() => setViewingReceiptOrder(null)}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[400px] max-h-[85vh] sm:max-h-[90vh] flex flex-col bg-white rounded-3xl shadow-2xl border border-slate-200/90 relative overflow-hidden animate-in zoom-in-95 duration-200"
+          >
             {/* STICKY TOP CONTROL BAR (Integrated into Header) */}
-            <div className="no-print shrink-0 bg-slate-900 text-white px-4 py-2.5 sm:px-5 sm:py-3 flex items-center justify-between border-b border-slate-800 z-10">
+            <div className="no-print shrink-0 bg-slate-900 text-white px-4 py-3 flex items-center justify-between border-b border-slate-800 z-10">
               <div className="flex items-center gap-2 min-w-0">
                 <FontAwesomeIcon icon={faReceipt} className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span className="font-mono font-bold text-xs truncate">#{viewingReceiptOrder.orderNumber}</span>
@@ -1052,7 +1055,7 @@ function OrdersContent() {
                 <button
                   type="button"
                   onClick={() => setViewingReceiptOrder(null)}
-                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors ml-0.5"
+                  className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors ml-0.5"
                   aria-label="ปิด"
                 >
                   <FontAwesomeIcon icon={faXmark} className="w-4 h-4" />
@@ -1061,11 +1064,11 @@ function OrdersContent() {
             </div>
 
             {/* SCROLLABLE RECEIPT PAPER BODY */}
-            <div className="flex-1 overflow-y-auto touch-scroll bg-slate-100/50 p-2.5 sm:p-4 flex justify-center">
+            <div className="flex-1 overflow-y-auto touch-scroll bg-slate-100/50 p-3 sm:p-4 flex flex-col items-center">
               {/* Authentic 80mm Slip Paper Container */}
               <div
                 id="admin-printable-receipt"
-                className="w-full bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 shadow-sm relative overflow-hidden text-slate-800 font-sans transition-all text-left mb-6 sm:mb-2"
+                className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-sm relative overflow-hidden text-slate-800 font-sans transition-all text-left mb-3"
               >
                 {/* Top Sawtooth Paper Tear Effect (no-print) */}
                 <div className="w-full h-2 overflow-hidden flex text-slate-100 no-print">
@@ -1250,6 +1253,18 @@ function OrdersContent() {
                   </svg>
                 </div>
               </div>
+
+              {/* Bottom Quick Close Button (Mobile Thumb-friendly) */}
+              <div className="w-full no-print pt-1 pb-1">
+                <button
+                  type="button"
+                  onClick={() => setViewingReceiptOrder(null)}
+                  className="w-full py-2.5 px-4 rounded-xl bg-slate-200/80 hover:bg-slate-300 active:bg-slate-300/80 text-slate-700 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <FontAwesomeIcon icon={faXmark} className="w-3.5 h-3.5" />
+                  <span>ปิดหน้าต่างใบเสร็จ</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1370,12 +1385,19 @@ function OrdersContent() {
               </div>
             </div>
 
-            <div className="p-4 flex items-center justify-center bg-slate-900/5 overflow-auto max-h-[65vh] touch-scroll">
-              <img
-                src={viewingSlipUrl}
-                alt="Payment Slip Full Size"
-                className="max-w-full max-h-[60vh] object-contain rounded-xl shadow-md border border-slate-200"
-              />
+            <div className="p-4 flex items-center justify-center bg-slate-900/5 overflow-auto max-h-[60vh] min-h-[160px] touch-scroll">
+              {viewingSlipUrl && viewingSlipUrl.trim() ? (
+                <img
+                  src={viewingSlipUrl}
+                  alt="Payment Slip Full Size"
+                  className="max-w-full max-h-[55vh] object-contain rounded-xl shadow-md border border-slate-200"
+                />
+              ) : (
+                <div className="text-center py-8 text-slate-400 text-xs">
+                  <FontAwesomeIcon icon={faReceipt} className="w-8 h-8 mb-2 opacity-40 block mx-auto text-slate-400" />
+                  <span>ไม่พบรูปภาพสลิป หรือออเดอร์นี้ยังไม่ได้แนบสลิป</span>
+                </div>
+              )}
             </div>
 
             <div className="p-3 border-t border-slate-100 bg-white flex justify-between items-center text-xs text-slate-500">
