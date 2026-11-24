@@ -28,9 +28,25 @@ import {
   faDownload,
   faBuildingColumns,
   faArrowRight,
+  faChevronDown,
 } from '@fortawesome/free-solid-svg-icons';
 import { faInstagram } from '@fortawesome/free-brands-svg-icons';
 import { OrderDetail, OrderStatus } from '@/types';
+
+const ORDER_STATUS_CONFIG: {
+  status: OrderStatus;
+  label: string;
+  icon: any;
+  color: string;
+  badgeBg: string;
+}[] = [
+  { status: 'PENDING', label: 'รอยืนยัน', icon: faClock, color: 'text-amber-500', badgeBg: 'bg-amber-50 border-amber-200/80 text-amber-800' },
+  { status: 'CONFIRMED', label: 'ยืนยันแล้ว', icon: faCircleCheck, color: 'text-blue-500', badgeBg: 'bg-blue-50 border-blue-200/80 text-blue-800' },
+  { status: 'PREPARING', label: 'กำลังเตรียมสินค้า', icon: faKitchenSet, color: 'text-purple-500', badgeBg: 'bg-purple-50 border-purple-200/80 text-purple-800' },
+  { status: 'SHIPPING', label: 'กำลังจัดส่ง', icon: faTruck, color: 'text-sky-500', badgeBg: 'bg-sky-50 border-sky-200/80 text-sky-800' },
+  { status: 'COMPLETED', label: 'จัดส่งสำเร็จ', icon: faCircleCheck, color: 'text-emerald-500', badgeBg: 'bg-emerald-50 border-emerald-200/80 text-emerald-800' },
+  { status: 'CANCELLED', label: 'ยกเลิกออเดอร์', icon: faCircleXmark, color: 'text-rose-500', badgeBg: 'bg-rose-50 border-rose-200/80 text-rose-800' },
+];
 
 const STATUS_TABS: { key: string; label: string; status?: OrderStatus; color: string }[] = [
   { key: 'ALL', label: 'ทั้งหมด', color: 'bg-slate-100 text-slate-700' },
@@ -69,6 +85,7 @@ function OrdersContent() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [viewingReceiptOrder, setViewingReceiptOrder] = useState<OrderDetail | null>(null);
   const [isSavingReceipt, setIsSavingReceipt] = useState(false);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
 
   const handleSaveReceiptImage = async () => {
     const slipElement = document.getElementById('admin-printable-receipt');
@@ -665,8 +682,17 @@ function OrdersContent() {
       {/* ORDER DETAIL MODAL                                   */}
       {/* ==================================================== */}
       {selectedOrder && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-150">
-          <div className="bg-white w-full sm:max-w-2xl h-[92dvh] sm:h-auto sm:max-h-[88vh] rounded-t-3xl sm:rounded-2xl shadow-2xl border-t sm:border border-slate-200/80 relative flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+        <div
+          onClick={() => {
+            setSelectedOrder(null);
+            setStatusDropdownOpen(false);
+          }}
+          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white w-full sm:max-w-2xl h-[92dvh] sm:h-auto sm:max-h-[88vh] rounded-t-3xl sm:rounded-2xl shadow-2xl border-t sm:border border-slate-200/80 relative flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200"
+          >
             {/* Mobile Sheet Handle Pill */}
             <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto my-2.5 sm:hidden shrink-0" />
 
@@ -697,7 +723,10 @@ function OrdersContent() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSelectedOrder(null)}
+                  onClick={() => {
+                    setSelectedOrder(null);
+                    setStatusDropdownOpen(false);
+                  }}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
                   aria-label="ปิดหน้าต่าง"
                 >
@@ -763,22 +792,93 @@ function OrdersContent() {
                 )}
 
                 {/* Status Switcher Row */}
-                <div className="flex items-center justify-between gap-2.5 pt-2 border-t border-slate-200/60">
+                <div className="flex items-center justify-between gap-2.5 pt-2 border-t border-slate-200/60 relative">
                   <span className="text-xs text-slate-500 font-medium">จัดการสถานะออเดอร์:</span>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={selectedOrder.status}
+                  <div className="relative">
+                    {/* Custom Status Dropdown Trigger */}
+                    <button
+                      type="button"
                       disabled={updatingStatus}
-                      onChange={(e) => handleUpdateStatus(selectedOrder.id, e.target.value as OrderStatus)}
-                      className="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 outline-none focus:border-slate-400 transition-colors cursor-pointer"
+                      onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 shadow-2xs transition-all active:scale-95 disabled:opacity-50"
                     >
-                      <option value="PENDING">รอยืนยัน (PENDING)</option>
-                      <option value="CONFIRMED">ยืนยันแล้ว (CONFIRMED)</option>
-                      <option value="PREPARING">กำลังเตรียมสินค้า (PREPARING)</option>
-                      <option value="SHIPPING">กำลังจัดส่ง (SHIPPING)</option>
-                      <option value="COMPLETED">จัดส่งสำเร็จ (COMPLETED)</option>
-                      <option value="CANCELLED">ยกเลิกออเดอร์ (CANCELLED)</option>
-                    </select>
+                      {(() => {
+                        const currentConfig =
+                          ORDER_STATUS_CONFIG.find((c) => c.status === selectedOrder.status) ||
+                          ORDER_STATUS_CONFIG[0];
+                        return (
+                          <>
+                            <FontAwesomeIcon
+                              icon={updatingStatus ? faRotate : currentConfig.icon}
+                              className={`w-3.5 h-3.5 shrink-0 ${
+                                updatingStatus ? 'animate-spin text-slate-400' : currentConfig.color
+                              }`}
+                            />
+                            <span className="text-slate-800">{currentConfig.label}</span>
+                            <FontAwesomeIcon
+                              icon={faChevronDown}
+                              className={`w-2.5 h-2.5 text-slate-400 transition-transform duration-200 ${
+                                statusDropdownOpen ? 'rotate-180' : ''
+                              }`}
+                            />
+                          </>
+                        );
+                      })()}
+                    </button>
+
+                    {/* Pop-up Dropdown Menu */}
+                    {statusDropdownOpen && (
+                      <>
+                        {/* Backdrop to close on click outside */}
+                        <div
+                          className="fixed inset-0 z-20"
+                          onClick={() => setStatusDropdownOpen(false)}
+                        />
+
+                        <div className="absolute right-0 top-full mt-1.5 w-52 bg-white rounded-2xl shadow-xl border border-slate-200/90 py-1.5 z-30 animate-in fade-in zoom-in-95 duration-150">
+                          <div className="px-3 py-1.5 text-[10px] uppercase font-mono font-bold tracking-wider text-slate-400 border-b border-slate-100">
+                            เลือกสถานะ
+                          </div>
+                          <div className="py-1">
+                            {ORDER_STATUS_CONFIG.map((opt) => {
+                              const isSelected = selectedOrder.status === opt.status;
+                              return (
+                                <button
+                                  key={opt.status}
+                                  type="button"
+                                  disabled={updatingStatus}
+                                  onClick={() => {
+                                    setStatusDropdownOpen(false);
+                                    if (!isSelected) {
+                                      handleUpdateStatus(selectedOrder.id, opt.status);
+                                    }
+                                  }}
+                                  className={`w-full px-3 py-2 text-left flex items-center justify-between text-xs transition-colors ${
+                                    isSelected
+                                      ? 'bg-slate-50 font-semibold text-slate-900'
+                                      : 'hover:bg-slate-50/80 text-slate-700 font-medium'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <FontAwesomeIcon
+                                      icon={opt.icon}
+                                      className={`w-3.5 h-3.5 shrink-0 ${opt.color}`}
+                                    />
+                                    <span className="truncate">{opt.label}</span>
+                                  </div>
+                                  {isSelected && (
+                                    <FontAwesomeIcon
+                                      icon={faCheck}
+                                      className="w-3 h-3 text-slate-600 shrink-0"
+                                    />
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -938,7 +1038,10 @@ function OrdersContent() {
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setSelectedOrder(null)}
+                  onClick={() => {
+                    setSelectedOrder(null);
+                    setStatusDropdownOpen(false);
+                  }}
                   className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-colors"
                 >
                   ปิด
