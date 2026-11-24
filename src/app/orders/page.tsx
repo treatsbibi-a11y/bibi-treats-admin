@@ -687,7 +687,7 @@ function OrdersContent() {
             setSelectedOrder(null);
             setStatusDropdownOpen(false);
           }}
-          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-x-hidden animate-in fade-in duration-150"
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -699,18 +699,18 @@ function OrdersContent() {
             {/* STICKY HEADER */}
             <div className="shrink-0 px-4 sm:px-6 py-3 sm:py-3.5 border-b border-slate-100 flex items-center justify-between gap-2 bg-white z-10">
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                   <h3 className="text-base sm:text-lg font-bold text-slate-900 font-mono tracking-tight">
                     #{selectedOrder.orderNumber}
                   </h3>
                   {getStatusBadge(selectedOrder.status)}
                 </div>
-                <p className="text-[11px] sm:text-xs text-slate-400 font-mono mt-0.5">
+                <p className="text-[11px] sm:text-xs text-slate-400 font-mono mt-0.5 truncate">
                   สั่งซื้อเมื่อ: {new Date(selectedOrder.createdAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })}
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setViewingReceiptOrder(selectedOrder)}
@@ -747,7 +747,7 @@ function OrdersContent() {
                   </div>
                 ) : (
                   <div>
-                    <div className="flex items-center justify-between text-[11px] font-medium text-slate-500 mb-2">
+                    <div className="flex items-center justify-between text-[11px] font-medium text-slate-500 mb-2.5">
                       <span className="text-slate-400 uppercase tracking-wider font-mono text-[10px]">ขั้นตอนคำสั่งซื้อ</span>
                       <span className="text-slate-700 font-semibold">
                         {selectedOrder.status === 'PENDING' && '1/5: รอยืนยันจากร้าน'}
@@ -758,8 +758,8 @@ function OrdersContent() {
                       </span>
                     </div>
 
-                    {/* Visual 5-step progress bar */}
-                    <div className="grid grid-cols-5 gap-1.5">
+                    {/* Visual 5-step progress bar with comfortable breathing gap */}
+                    <div className="grid grid-cols-5 gap-2 sm:gap-2.5">
                       {['PENDING', 'CONFIRMED', 'PREPARING', 'SHIPPING', 'COMPLETED'].map((stepKey, idx) => {
                         const stepOrder = ['PENDING', 'CONFIRMED', 'PREPARING', 'SHIPPING', 'COMPLETED'];
                         const currentIdx = stepOrder.indexOf(selectedOrder.status);
@@ -767,17 +767,25 @@ function OrdersContent() {
                         const isCurrent = currentIdx === idx;
 
                         return (
-                          <div key={stepKey} className="space-y-1">
+                          <div key={stepKey} className="flex flex-col gap-1.5 min-w-0">
                             <div
-                              className={`h-1.5 rounded-full transition-all ${
+                              className={`h-2 rounded-full transition-all duration-200 shadow-2xs ${
                                 isCurrent
-                                  ? 'bg-slate-900'
+                                  ? 'bg-slate-900 ring-2 ring-slate-900/20'
                                   : isPastOrCurrent
                                   ? 'bg-emerald-500'
                                   : 'bg-slate-200'
                               }`}
                             />
-                            <div className={`text-[10px] text-center truncate ${isCurrent ? 'font-bold text-slate-900' : isPastOrCurrent ? 'text-slate-600 font-medium' : 'text-slate-400'}`}>
+                            <div
+                              className={`text-[10px] sm:text-[11px] text-center truncate tracking-tight transition-colors ${
+                                isCurrent
+                                  ? 'font-bold text-slate-900'
+                                  : isPastOrCurrent
+                                  ? 'text-slate-600 font-semibold'
+                                  : 'text-slate-400 font-normal'
+                              }`}
+                            >
                               {idx === 0 && 'รอยืนยัน'}
                               {idx === 1 && 'ยืนยัน'}
                               {idx === 2 && 'เตรียม'}
@@ -1025,7 +1033,7 @@ function OrdersContent() {
             </div>
 
             {/* STICKY BOTTOM ACTION BAR */}
-            <div className="shrink-0 bg-white border-t border-slate-200/80 px-4 py-3 sm:px-6 sm:py-3.5 flex items-center justify-between gap-3 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] z-10">
+            <div className="shrink-0 bg-white border-t border-slate-200/80 px-4 py-3 sm:px-6 sm:py-3.5 pb-[calc(0.75rem+env(safe-area-inset-bottom,0.5rem))] flex items-center justify-between gap-3 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] z-10">
               {/* Left: Prominent Total */}
               <div className="min-w-0">
                 <div className="text-[10px] sm:text-[11px] text-slate-400 font-medium leading-none mb-1">ยอดสุทธิทั้งสิ้น</div>
