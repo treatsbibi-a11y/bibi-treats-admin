@@ -1,25 +1,10 @@
 import type { Metadata } from 'next';
-import { Rubik, Prompt } from 'next/font/google';
 import { config } from '@fortawesome/fontawesome-svg-core';
 import '@fortawesome/fontawesome-svg-core/styles.css';
 import './globals.css';
 import AdminShell from '@/components/admin/AdminShell';
 
 config.autoAddCss = false;
-
-const rubik = Rubik({
-  subsets: ['latin'],
-  weight: ['300', '400', '500'],
-  variable: '--font-rubik',
-  display: 'swap',
-});
-
-const prompt = Prompt({
-  subsets: ['thai', 'latin'],
-  weight: ['300', '400', '500', '600'],
-  variable: '--font-prompt',
-  display: 'swap',
-});
 
 export const metadata: Metadata = {
   title: "Bibi's Treats | Admin Operations Console",
@@ -35,16 +20,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="th" className={`${rubik.variable} ${prompt.variable} scroll-smooth`}>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=Rubik:wght@300;400;500&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body className="min-h-screen bg-[#F8FBFE] text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-900">
+    <html lang="th" className="antialiased">
+      <body className="font-sans min-h-screen bg-[#FAFCFE] text-[#0F172A] selection:bg-[#E0F2FE] selection:text-[#0284C7] overflow-x-hidden">
         <AdminShell>{children}</AdminShell>
       </body>
     </html>
