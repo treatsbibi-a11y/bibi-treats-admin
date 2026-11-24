@@ -317,6 +317,169 @@ export async function getD1Orders(options?: {
   return [];
 }
 
+export async function getD1OrderDetail(
+  orderIdOrNumber: string,
+  d1Binding?: CloudflareD1Binding
+): Promise<OrderDetail | null> {
+  if (d1Binding) {
+    const orderRow = await d1Binding
+      .prepare(`
+        SELECT 
+          o.id, o.orderNumber, o.customerId, o.subtotal, o.shippingFee, o.total,
+          o.status, o.paymentMethod, o.slipUrl, o.note, o.createdAt, o.updatedAt,
+          c.id as customer_id, c.name as customer_name, c.phone as customer_phone,
+          c.instagram as customer_instagram, c.address as customer_address
+        FROM [Order] o
+        LEFT JOIN Customer c ON o.customerId = c.id
+        WHERE o.id = ? OR o.orderNumber = ?
+        LIMIT 1
+      `)
+      .bind(orderIdOrNumber, orderIdOrNumber)
+      .first<any>();
+
+    if (!orderRow) return null;
+
+    const { results: itemRows } = await d1Binding
+      .prepare(`
+        SELECT id, orderId, productId, productName, quantity, price, subtotal
+        FROM OrderItem
+        WHERE orderId = ?
+      `)
+      .bind(orderRow.id)
+      .all<any>();
+
+    const productIds = (itemRows || [])
+      .map((item: any) => item.productId)
+      .filter((id: any): id is string => Boolean(id));
+
+    const imagesByProductId = new Map<string, { imageUrl: string; isPrimary: boolean }[]>();
+
+    if (productIds.length > 0) {
+      const placeholders = productIds.map(() => '?').join(',');
+      const { results: imgRows } = await d1Binding
+        .prepare(`
+          SELECT productId, imageUrl, isPrimary, displayOrder
+          FROM ProductImage
+          WHERE productId IN (${placeholders})
+          ORDER BY displayOrder ASC
+        `)
+        .bind(...productIds)
+        .all<any>();
+
+      for (const img of (imgRows || [])) {
+        if (!imagesByProductId.has(img.productId)) {
+          imagesByProductId.set(img.productId, []);
+        }
+        imagesByProductId.get(img.productId)!.push({
+          imageUrl: img.imageUrl,
+          isPrimary: Boolean(img.isPrimary),
+        });
+      }
+    }
+
+    const safeDate = (d: any) => {
+      if (!d) return new Date().toISOString();
+      const p = new Date(d);
+      return isNaN(p.getTime()) ? new Date().toISOString() : p.toISOString();
+    };
+
+    return {
+      id: orderRow.id,
+      orderNumber: orderRow.orderNumber,
+      customerId: orderRow.customerId,
+      subtotal: Number(orderRow.subtotal || 0),
+      shippingFee: Number(orderRow.shippingFee || 0),
+      total: Number(orderRow.total || 0),
+      status: orderRow.status as OrderStatus,
+      paymentMethod: orderRow.paymentMethod as PaymentMethod,
+      slipUrl: orderRow.slipUrl,
+      note: orderRow.note,
+      createdAt: safeDate(orderRow.createdAt),
+      customer: {
+        id: orderRow.customer_id || orderRow.customerId,
+        name: orderRow.customer_name || 'ลูกค้าทั่วไป',
+        phone: orderRow.customer_phone || '-',
+        instagram: orderRow.customer_instagram || null,
+        address: orderRow.customer_address || '-',
+      },
+      items: (itemRows || []).map((item: any) => ({
+        id: item.id,
+        productId: item.productId || '',
+        productName: item.productName,
+        quantity: Number(item.quantity),
+        price: Number(item.price),
+        subtotal: Number(item.subtotal),
+        product: item.productId
+          ? {
+              images: imagesByProductId.get(item.productId) || [],
+            }
+          : null,
+      })),
+    };
+  }
+
+  // Fallback / Standard Node Runtime via Prisma:
+  const order = await prisma.order.findFirst({
+    where: {
+      OR: [{ id: orderIdOrNumber }, { orderNumber: orderIdOrNumber }],
+    },
+    include: {
+      customer: true,
+      items: {
+        include: {
+          product: {
+            include: {
+              images: {
+                where: { isPrimary: true },
+                take: 1,
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!order) return null;
+
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    customerId: order.customerId,
+    subtotal: order.subtotal,
+    shippingFee: order.shippingFee,
+    total: order.total,
+    status: order.status as OrderStatus,
+    paymentMethod: order.paymentMethod as PaymentMethod,
+    slipUrl: order.slipUrl,
+    note: order.note,
+    createdAt: order.createdAt.toISOString(),
+    customer: {
+      id: order.customer.id,
+      name: order.customer.name,
+      phone: order.customer.phone,
+      instagram: order.customer.instagram,
+      address: order.customer.address,
+    },
+    items: order.items.map((item) => ({
+      id: item.id,
+      productId: item.productId ?? '',
+      productName: item.productName,
+      quantity: item.quantity,
+      price: item.price,
+      subtotal: item.subtotal,
+      product: item.product
+        ? {
+            images: item.product.images.map((img) => ({
+              imageUrl: img.imageUrl,
+              isPrimary: img.isPrimary,
+            })),
+          }
+        : null,
+    })),
+  };
+}
+
 export async function getD1StoreSettings(d1Binding?: CloudflareD1Binding): Promise<StoreSettingsData | null> {
   if (d1Binding) {
     const stmt = d1Binding.prepare(`SELECT * FROM StoreSettings LIMIT 1`);
