@@ -1019,43 +1019,54 @@ function OrdersContent() {
       {viewingReceiptOrder && (
         <div
           onClick={() => setViewingReceiptOrder(null)}
-          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[400px] max-h-[85vh] sm:max-h-[90vh] flex flex-col bg-white rounded-3xl shadow-2xl border border-slate-200/90 relative overflow-hidden animate-in zoom-in-95 duration-200"
+            className="w-full sm:max-w-[420px] h-[92vh] sm:h-auto sm:max-h-[90vh] flex flex-col bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200/90 relative overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200"
           >
-            {/* STICKY TOP CONTROL BAR (Integrated into Header) */}
-            <div className="no-print shrink-0 bg-slate-900 text-white px-4 py-3 flex items-center justify-between border-b border-slate-800 z-10">
-              <div className="flex items-center gap-2 min-w-0">
-                <FontAwesomeIcon icon={faReceipt} className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="font-mono font-bold text-xs truncate">#{viewingReceiptOrder.orderNumber}</span>
-                <span className="text-[10px] text-slate-400 font-mono hidden xs:inline shrink-0">(80mm Slip)</span>
+            {/* Mobile Sheet Drag Handle Pill (no-print) */}
+            <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mt-2 sm:hidden shrink-0 no-print" />
+
+            {/* HEADER CONTROL BAR: Clean White & Slate (no-print) */}
+            <div className="no-print shrink-0 bg-white text-slate-800 px-4 py-3 flex items-center justify-between border-b border-slate-200 z-10">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200/80 flex items-center justify-center text-amber-600 shrink-0">
+                  <FontAwesomeIcon icon={faReceipt} className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono font-bold text-sm text-slate-900 truncate">
+                      #{viewingReceiptOrder.orderNumber}
+                    </span>
+                    <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono shrink-0">
+                      80mm
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 leading-none mt-0.5">
+                    ใบเสร็จรับเงิน / คำสั่งซื้อ
+                  </div>
+                </div>
               </div>
+
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
                   disabled={isSavingReceipt}
                   onClick={handleSaveReceiptImage}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors border border-slate-700 active:scale-95 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors border border-slate-200 active:scale-95 disabled:opacity-50"
                   title="บันทึกเป็นรูปภาพ PNG คมชัดสูง"
                 >
-                  <FontAwesomeIcon icon={isSavingReceipt ? faRotate : faDownload} className={`w-3 h-3 ${isSavingReceipt ? 'animate-spin text-amber-400' : 'text-slate-300'}`} />
-                  <span className="hidden sm:inline">{isSavingReceipt ? 'กำลังบันทึก...' : 'บันทึกรูป'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-white hover:bg-slate-100 text-slate-900 rounded-lg transition-colors shadow-xs active:scale-95"
-                  title="พิมพ์ใบเสร็จ (Print)"
-                >
-                  <FontAwesomeIcon icon={faPrint} className="w-3 h-3 text-slate-700" />
-                  <span>พิมพ์</span>
+                  <FontAwesomeIcon
+                    icon={isSavingReceipt ? faRotate : faDownload}
+                    className={`w-3.5 h-3.5 ${isSavingReceipt ? 'animate-spin text-amber-500' : 'text-slate-600'}`}
+                  />
+                  <span className="hidden xs:inline">{isSavingReceipt ? 'กำลังบันทึก...' : 'บันทึกรูป'}</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setViewingReceiptOrder(null)}
-                  className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors ml-0.5"
+                  className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 transition-colors ml-0.5 active:scale-95"
                   aria-label="ปิด"
                 >
                   <FontAwesomeIcon icon={faXmark} className="w-4 h-4" />
@@ -1064,11 +1075,11 @@ function OrdersContent() {
             </div>
 
             {/* SCROLLABLE RECEIPT PAPER BODY */}
-            <div className="flex-1 overflow-y-auto touch-scroll bg-slate-100/50 p-3 sm:p-4 flex flex-col items-center">
+            <div className="flex-1 overflow-y-auto touch-scroll bg-slate-100/60 p-2.5 sm:p-4 flex flex-col items-center">
               {/* Authentic 80mm Slip Paper Container */}
               <div
                 id="admin-printable-receipt"
-                className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-sm relative overflow-hidden text-slate-800 font-sans transition-all text-left mb-3"
+                className="w-full max-w-[380px] bg-white rounded-2xl border border-slate-200/90 shadow-sm relative overflow-hidden text-slate-800 font-sans transition-all text-left mb-2"
               >
                 {/* Top Sawtooth Paper Tear Effect (no-print) */}
                 <div className="w-full h-2 overflow-hidden flex text-slate-100 no-print">
@@ -1253,18 +1264,27 @@ function OrdersContent() {
                   </svg>
                 </div>
               </div>
+            </div>
 
-              {/* Bottom Quick Close Button (Mobile Thumb-friendly) */}
-              <div className="w-full no-print pt-1 pb-1">
-                <button
-                  type="button"
-                  onClick={() => setViewingReceiptOrder(null)}
-                  className="w-full py-2.5 px-4 rounded-xl bg-slate-200/80 hover:bg-slate-300 active:bg-slate-300/80 text-slate-700 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <FontAwesomeIcon icon={faXmark} className="w-3.5 h-3.5" />
-                  <span>ปิดหน้าต่างใบเสร็จ</span>
-                </button>
-              </div>
+            {/* STICKY BOTTOM ACTION BAR (Thumb-friendly & Professional) */}
+            <div className="no-print shrink-0 bg-white/95 backdrop-blur-md border-t border-slate-200/90 p-3 sm:p-4 flex items-center gap-2.5 z-10 shadow-lg">
+              <button
+                type="button"
+                onClick={() => setViewingReceiptOrder(null)}
+                className="flex-1 py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all"
+              >
+                <FontAwesomeIcon icon={faXmark} className="w-3.5 h-3.5 text-slate-500" />
+                <span>ปิด</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex-[2] py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-semibold text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2 transition-all"
+              >
+                <FontAwesomeIcon icon={faPrint} className="w-3.5 h-3.5 text-slate-200" />
+                <span>พิมพ์ใบเสร็จ (80mm)</span>
+              </button>
             </div>
           </div>
         </div>
