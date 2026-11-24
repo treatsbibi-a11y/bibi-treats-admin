@@ -171,13 +171,26 @@ export default function AdminSettingsPage() {
           </p>
         </div>
 
-        <button
-          onClick={fetchSettings}
-          className="flex items-center justify-center space-x-2 px-4 py-2.5 min-h-[44px] rounded-2xl bg-slate-50 hover:bg-bibi-50 text-slate-700 text-xs sm:text-sm font-semibold border border-slate-200 transition-colors active:scale-95 w-full sm:w-auto"
-        >
-          <FontAwesomeIcon icon={faRotate} className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          <span>รีเฟรช</span>
-        </button>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={fetchSettings}
+            className="flex-1 sm:flex-initial flex items-center justify-center space-x-2 px-4 py-2.5 min-h-[44px] rounded-2xl bg-slate-50 hover:bg-bibi-50 text-slate-700 text-xs sm:text-sm font-semibold border border-slate-200 transition-colors active:scale-95"
+          >
+            <FontAwesomeIcon icon={faRotate} className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>รีเฟรช</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={saving}
+            className="flex-1 sm:flex-initial flex items-center justify-center space-x-2 px-5 py-2.5 min-h-[44px] rounded-2xl bg-gradient-to-r from-bibi-400 to-bibi-500 hover:from-bibi-500 hover:to-bibi-600 text-white text-xs sm:text-sm font-bold shadow-[0_4px_12px_rgba(77,167,232,0.3)] transition-all active:scale-95 disabled:opacity-50"
+          >
+            <FontAwesomeIcon icon={faFloppyDisk} className="w-3.5 h-3.5" />
+            <span>{saving ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Success / Error notification */}
@@ -608,7 +621,7 @@ export default function AdminSettingsPage() {
             </div>
 
             {/* Save Button */}
-            <div className="bg-white p-4 rounded-3xl border border-bibi-100 shadow-sm sticky bottom-20 lg:bottom-4 z-10">
+            <div className="bg-white p-4 rounded-3xl border border-bibi-100 shadow-sm static lg:sticky lg:bottom-4 z-10">
               <button
                 type="submit"
                 disabled={saving}
