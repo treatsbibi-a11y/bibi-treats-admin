@@ -10,6 +10,9 @@ import {
   faBagShopping,
   faBahtSign,
   faBox,
+  faChevronDown,
+  faChevronUp,
+  faTrophy,
 } from '@fortawesome/free-solid-svg-icons';
 import * as XLSX from 'xlsx';
 import { OrderDetail } from '@/types';
@@ -22,6 +25,9 @@ export default function AdminReportsPage() {
   const todayStr = new Date().toISOString().split('T')[0];
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState(todayStr);
+
+  // Toggle Top 5 vs All Products
+  const [showAllProducts, setShowAllProducts] = useState(false);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -113,6 +119,10 @@ export default function AdminReportsPage() {
   const productSalesList = Object.values(productSalesMap).sort(
     (a, b) => b.revenue - a.revenue
   );
+
+  const displayedProductSales = showAllProducts
+    ? productSalesList
+    : productSalesList.slice(0, 5);
 
   // Export to Excel (.xlsx)
   const handleExportExcel = () => {
@@ -366,20 +376,39 @@ export default function AdminReportsPage() {
       <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200/80 shadow-sm print:border-slate-300 print:shadow-none">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-base sm:text-lg font-bold text-slate-900">
-              สรุปยอดขายแยกตามเมนูขนม
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
+              {!showAllProducts && (
+                <FontAwesomeIcon icon={faTrophy} className="w-4 h-4 text-amber-500 shrink-0" />
+              )}
+              <span>
+                {showAllProducts ? 'สรุปยอดขายแยกตามเมนูขนมทั้งหมด' : '5 อันดับเมนูขายดีที่สุด'}
+              </span>
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">ประสิทธิภาพยอดขายแต่ละรายการขนม</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {showAllProducts
+                ? 'ประสิทธิภาพยอดขายแต่ละรายการขนมทั้งหมดตามช่วงเวลาที่เลือก'
+                : 'เมนูขนมที่สร้างยอดขายสูงสุด 5 อันดับแรก'}
+            </p>
           </div>
-          <span className="text-xs font-mono bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full font-medium">
-            {productSalesList.length} เมนู
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className={`text-xs font-mono px-2.5 py-1 rounded-full font-semibold transition-colors ${
+                showAllProducts
+                  ? 'bg-slate-100 text-slate-600'
+                  : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              {showAllProducts
+                ? `${productSalesList.length} เมนู`
+                : `Top 5 จาก ${productSalesList.length} เมนู`}
+            </span>
+          </div>
         </div>
 
         {/* Mobile View: Clean Luxury Ranking Cards */}
         <div className="lg:hidden space-y-2.5">
-          {productSalesList.length > 0 ? (
-            productSalesList.map((prod, idx) => {
+          {displayedProductSales.length > 0 ? (
+            displayedProductSales.map((prod, idx) => {
               const share =
                 totalSalesRevenue > 0
                   ? Math.round((prod.revenue / totalSalesRevenue) * 100)
@@ -452,8 +481,8 @@ export default function AdminReportsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {productSalesList.length > 0 ? (
-                productSalesList.map((prod, idx) => {
+              {displayedProductSales.length > 0 ? (
+                displayedProductSales.map((prod, idx) => {
                   const share =
                     totalSalesRevenue > 0
                       ? Math.round((prod.revenue / totalSalesRevenue) * 100)
@@ -508,6 +537,27 @@ export default function AdminReportsPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Toggle Button for More/Less Menus */}
+        {productSalesList.length > 5 && (
+          <div className="mt-4 pt-3 border-t border-slate-100 flex justify-center print:hidden">
+            <button
+              type="button"
+              onClick={() => setShowAllProducts(!showAllProducts)}
+              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all active:scale-95 shadow-sm"
+            >
+              <span>
+                {showAllProducts
+                  ? 'ย่อเหลือ 5 อันดับแรก'
+                  : `ดูทั้งหมด (${productSalesList.length} เมนู)`}
+              </span>
+              <FontAwesomeIcon
+                icon={showAllProducts ? faChevronUp : faChevronDown}
+                className="w-3 h-3 text-slate-500"
+              />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Orders List for selected period */}
