@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ authenticated: false }, { status: 401 });
     }
 
-    const session = verifyAdminToken(token);
+    const session = await verifyAdminToken(token);
     if (!session) {
       return NextResponse.json({ authenticated: false }, { status: 401 });
     }
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate JWT token
-    const token = signAdminToken({
+    const token = await signAdminToken({
       id: admin.id,
       username: admin.username,
       role: admin.role,
