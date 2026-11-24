@@ -15,26 +15,50 @@ export async function GET(req: NextRequest) {
 
     if (d1Binding) {
       const metrics = await getD1AdminMetrics(d1Binding);
+      const orders = await prisma.order.findMany({
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          customer: true,
+          items: {
+            include: {
+              product: {
+                include: {
+                  images: {
+                    where: { isPrimary: true },
+                    take: 1,
+                  },
+                },
+              },
+            },
+          },
+        },
+      }).catch(() => []);
+
       return NextResponse.json({
+        totalOrders: metrics.totalOrders || 0,
+        todayOrders: metrics.todayOrders || 0,
+        todaySales: 0,
+        totalSales: metrics.totalRevenue || 0,
+        totalProducts: metrics.totalProducts || 0,
+        remainingStock: metrics.totalStock || 0,
+        averageOrderValue: metrics.totalOrders > 0 ? Math.round(metrics.totalRevenue / metrics.totalOrders) : 0,
+        lowStockCount: 0,
+        dailyChart: [],
+        last7DaysChart: [],
+        monthlyChart: [],
+        bestSellers: [],
+        recentOrders: orders,
+        // Also include overview for backwards compatibility if needed
         overview: {
-          totalOrders: metrics.totalOrders,
-          todayOrders: metrics.todayOrders,
+          totalOrders: metrics.totalOrders || 0,
+          todayOrders: metrics.todayOrders || 0,
           todaySales: 0,
-          totalSales: metrics.totalRevenue,
-          totalProducts: metrics.activeProducts,
-          remainingStock: metrics.totalStock,
+          totalSales: metrics.totalRevenue || 0,
+          totalProducts: metrics.activeProducts || 0,
+          remainingStock: metrics.totalStock || 0,
           lowStockCount: 0,
         },
-        ordersByStatus: {
-          PENDING: 0,
-          CONFIRMED: 0,
-          PREPARING: 0,
-          SHIPPING: 0,
-          COMPLETED: metrics.totalOrders,
-        },
-        topProducts: [],
-        salesLast7Days: [],
-        recentOrders: [],
       });
     }
     const now = new Date();

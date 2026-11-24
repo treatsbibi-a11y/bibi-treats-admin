@@ -217,9 +217,9 @@ export async function getD1Orders(options?: {
   if (options?.d1Binding) {
     let sql = `
       SELECT 
-        o.id, o.orderNumber, o.customerId, o.status, o.paymentStatus, o.paymentMethod,
-        o.paymentProof, o.subtotal, o.shippingFee, o.discount, o.total, o.note,
-        o.trackingNumber, o.shippingCarrier, o.createdAt, o.updatedAt,
+        o.id, o.orderNumber, o.customerId, o.status, o.paymentMethod,
+        o.slipUrl, o.subtotal, o.shippingFee, o.total, o.note,
+        o.createdAt, o.updatedAt,
         c.name as customer_name, c.phone as customer_phone, c.instagram as customer_instagram, c.address as customer_address
       FROM [Order] o
       LEFT JOIN Customer c ON o.customerId = c.id
@@ -250,7 +250,7 @@ export async function getD1Orders(options?: {
     if (orderIds.length > 0) {
       try {
         const itemsStmt = options.d1Binding.prepare(`
-          SELECT oi.id, oi.orderId, oi.productId, oi.productName, oi.quantity, oi.price, oi.subtotal, oi.options,
+          SELECT oi.id, oi.orderId, oi.productId, oi.productName, oi.quantity, oi.price, oi.subtotal,
                  p.name as p_name, pi.imageUrl as p_image
           FROM OrderItem oi
           LEFT JOIN Product p ON oi.productId = p.id
@@ -267,7 +267,6 @@ export async function getD1Orders(options?: {
             quantity: Number(item.quantity),
             price: Number(item.price),
             subtotal: Number(item.subtotal),
-            options: item.options ? (typeof item.options === 'string' ? JSON.parse(item.options) : item.options) : null,
             product: {
               id: item.productId,
               name: item.productName || item.p_name,
@@ -280,23 +279,30 @@ export async function getD1Orders(options?: {
       }
     }
 
+    const safeIso = (d: any) => {
+      if (!d) return new Date().toISOString();
+      const parsed = new Date(d);
+      return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+    };
+
     return results.map(row => ({
       id: row.id,
       orderNumber: row.orderNumber,
       customerId: row.customerId,
       status: row.status,
-      paymentStatus: row.paymentStatus,
+      paymentStatus: row.status === 'CANCELLED' ? 'FAILED' : 'PAID',
       paymentMethod: row.paymentMethod,
-      paymentProof: row.paymentProof,
-      subtotal: Number(row.subtotal),
-      shippingFee: Number(row.shippingFee),
-      discount: Number(row.discount),
-      total: Number(row.total),
+      slipUrl: row.slipUrl,
+      paymentProof: row.slipUrl,
+      subtotal: Number(row.subtotal || 0),
+      shippingFee: Number(row.shippingFee || 0),
+      discount: 0,
+      total: Number(row.total || 0),
       note: row.note,
-      trackingNumber: row.trackingNumber,
-      shippingCarrier: row.shippingCarrier,
-      createdAt: new Date(row.createdAt).toISOString(),
-      updatedAt: new Date(row.updatedAt).toISOString(),
+      trackingNumber: null,
+      shippingCarrier: null,
+      createdAt: safeIso(row.createdAt),
+      updatedAt: safeIso(row.updatedAt),
       customer: {
         id: row.customerId,
         name: row.customer_name || 'ลูกค้าทั่วไป',

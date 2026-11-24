@@ -183,7 +183,7 @@ export default function AdminDashboardPage() {
             แดชบอร์ดภาพรวมร้าน Bibi&apos;s Treats
           </h1>
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            วันนี้มียอดขาย <span className="font-mono font-bold text-emerald-400 text-sm sm:text-base">฿{stats ? stats.todaySales.toLocaleString() : '0'}</span> จาก {stats ? stats.todayOrders : 0} คำสั่งซื้อใหม่ที่รอดำเนินการ
+            วันนี้มียอดขาย <span className="font-mono font-bold text-emerald-400 text-sm sm:text-base">฿{(stats?.todaySales ?? 0).toLocaleString()}</span> จาก {stats?.todayOrders ?? 0} คำสั่งซื้อใหม่ที่รอดำเนินการ
           </p>
         </div>
 
@@ -222,12 +222,12 @@ export default function AdminDashboardPage() {
           </div>
           <div className="mt-3">
             <div className="text-xl sm:text-2xl font-bold font-mono text-slate-900 tracking-tight tabular-nums">
-              ฿{stats ? stats.totalSales.toLocaleString() : '-'}
+              ฿{(stats?.totalSales ?? 0).toLocaleString()}
             </div>
             <div className="flex items-center justify-between mt-1 text-[11px]">
               <span className="text-slate-400">วันนี้</span>
               <span className="font-mono font-bold text-emerald-600">
-                +฿{stats ? stats.todaySales.toLocaleString() : '0'}
+                +฿{(stats?.todaySales ?? 0).toLocaleString()}
               </span>
             </div>
           </div>
@@ -243,12 +243,12 @@ export default function AdminDashboardPage() {
           </div>
           <div className="mt-3">
             <div className="text-xl sm:text-2xl font-bold font-mono text-slate-900 tracking-tight tabular-nums">
-              {stats ? stats.totalOrders.toLocaleString() : '-'}
+              {(stats?.totalOrders ?? 0).toLocaleString()}
             </div>
             <div className="flex items-center justify-between mt-1 text-[11px]">
               <span className="text-slate-400">เฉลี่ยต่อบิล (AOV)</span>
               <span className="font-mono font-bold text-purple-700">
-                ฿{stats?.averageOrderValue ? stats.averageOrderValue.toLocaleString() : '212'}
+                ฿{(stats?.averageOrderValue ?? 212).toLocaleString()}
               </span>
             </div>
           </div>
@@ -264,7 +264,7 @@ export default function AdminDashboardPage() {
           </div>
           <div className="mt-3">
             <div className="text-xl sm:text-2xl font-bold font-mono text-slate-900 tracking-tight tabular-nums">
-              {stats ? stats.totalProducts.toLocaleString() : '-'}
+              {(stats?.totalProducts ?? 0).toLocaleString()}
             </div>
             <div className="flex items-center justify-between mt-1 text-[11px]">
               <span className="text-slate-400">เมนูขนมและเซ็ต</span>
@@ -292,7 +292,7 @@ export default function AdminDashboardPage() {
           </div>
           <div className="mt-3">
             <div className="text-xl sm:text-2xl font-bold font-mono text-slate-900 tracking-tight tabular-nums">
-              {stats ? stats.remainingStock.toLocaleString() : '-'}
+              {(stats?.remainingStock ?? 0).toLocaleString()}
             </div>
             <div className="flex items-center justify-between mt-1 text-[11px]">
               <span className="text-slate-400">สถานะคลังสินค้า</span>
@@ -565,15 +565,15 @@ export default function AdminDashboardPage() {
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-slate-600 gap-2">
-                  <span className="font-medium text-slate-800 truncate">{order.customer.name}</span>
+                  <span className="font-medium text-slate-800 truncate">{order.customer?.name || 'ลูกค้าทั่วไป'}</span>
                   <span className="font-bold text-slate-900 font-mono shrink-0 whitespace-nowrap">
-                    ฿{order.total.toLocaleString()}
+                    ฿{(order.total ?? 0).toLocaleString()}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-200/50">
                   <span className="font-mono whitespace-nowrap">
-                    {new Date(order.createdAt).toLocaleString('th-TH', {
+                    {new Date(order.createdAt || Date.now()).toLocaleString('th-TH', {
                       dateStyle: 'short',
                       timeStyle: 'short',
                     })}
@@ -613,17 +613,17 @@ export default function AdminDashboardPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3.5 whitespace-nowrap">
-                      <div className="font-medium text-slate-900 whitespace-nowrap">{order.customer.name}</div>
-                      <div className="text-xs text-slate-400 font-mono whitespace-nowrap">{order.customer.phone}</div>
+                      <div className="font-medium text-slate-900 whitespace-nowrap">{order.customer?.name || 'ลูกค้าทั่วไป'}</div>
+                      <div className="text-xs text-slate-400 font-mono whitespace-nowrap">{order.customer?.phone || '-'}</div>
                     </td>
                     <td className="px-4 py-3.5 text-xs text-slate-500 font-mono whitespace-nowrap">
-                      {new Date(order.createdAt).toLocaleString('th-TH', {
+                      {new Date(order.createdAt || Date.now()).toLocaleString('th-TH', {
                         dateStyle: 'short',
                         timeStyle: 'short',
                       })}
                     </td>
                     <td className="px-4 py-3.5 font-semibold text-slate-900 font-mono whitespace-nowrap">
-                      ฿{order.total.toLocaleString()}
+                      ฿{(order.total ?? 0).toLocaleString()}
                     </td>
                     <td className="px-4 py-3.5 whitespace-nowrap">
                       {getStatusBadge(order.status)}
@@ -744,7 +744,7 @@ export default function AdminDashboardPage() {
                       <span>แนบสลิปโอนเงินแล้ว</span>
                     </div>
                     <p className="text-[11px] text-emerald-700 mt-0.5 font-mono">
-                      ยอดชำระ ฿{selectedOrder.total.toLocaleString()}
+                      ยอดชำระ ฿{(selectedOrder.total ?? 0).toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -772,7 +772,7 @@ export default function AdminDashboardPage() {
                       <span className="text-slate-400 font-mono ml-1.5 text-[11px]">× {item.quantity}</span>
                     </div>
                     <span className="font-medium text-slate-900 font-mono">
-                      ฿{item.subtotal.toLocaleString()}
+                      ฿{(item.subtotal ?? 0).toLocaleString()}
                     </span>
                   </div>
                 ))}
@@ -790,11 +790,11 @@ export default function AdminDashboardPage() {
             <div className="pt-3 border-t border-slate-100 space-y-1.5 text-xs">
               <div className="flex justify-between text-slate-500">
                 <span>ยอดรวมสินค้า:</span>
-                <span className="font-mono text-slate-700">฿{selectedOrder.subtotal.toLocaleString()}</span>
+                <span className="font-mono text-slate-700">฿{(selectedOrder.subtotal ?? 0).toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-slate-500">
                 <span>ค่าจัดส่ง:</span>
-                <span className="font-mono text-slate-700">฿{selectedOrder.shippingFee.toLocaleString()}</span>
+                <span className="font-mono text-slate-700">฿{(selectedOrder.shippingFee ?? 0).toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-slate-500">
                 <span>วิธีการชำระเงิน:</span>
@@ -805,7 +805,7 @@ export default function AdminDashboardPage() {
               <div className="flex justify-between text-sm font-semibold text-slate-900 pt-2 border-t border-slate-200/80 items-baseline">
                 <span>ยอดสุทธิทั้งสิ้น:</span>
                 <span className="text-base font-bold font-mono text-slate-900">
-                  ฿{selectedOrder.total.toLocaleString()}
+                  ฿{(selectedOrder.total ?? 0).toLocaleString()}
                 </span>
               </div>
             </div>

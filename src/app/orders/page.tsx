@@ -454,10 +454,10 @@ function OrdersContent() {
                 <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between">
                   <div>
                     <div className="font-bold text-slate-900 font-mono text-sm">
-                      ฿{order.total.toLocaleString()}
+                      ฿{(order.total ?? 0).toLocaleString()}
                     </div>
                     <div className="text-[10px] text-slate-400 font-mono">
-                      {new Date(order.createdAt).toLocaleString('th-TH', {
+                      {new Date(order.createdAt || Date.now()).toLocaleString('th-TH', {
                         dateStyle: 'short',
                         timeStyle: 'short',
                       })}
