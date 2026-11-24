@@ -181,12 +181,15 @@ function OrdersContent() {
 
   // Update order status handler
   const handleUpdateStatus = async (orderId: string, newStatus: OrderStatus) => {
-    if (newStatus === 'CANCELLED') {
-      const order = orders.find((o) => o.id === orderId);
-      if (order) {
-        setCancelModalOrder(order);
-      }
-      return;
+    // Optimistic UI update: immediately tick checkmark and update status across UI
+    const prevOrder = selectedOrder;
+    const prevOrders = [...orders];
+
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
+    );
+    if (selectedOrder && selectedOrder.id === orderId) {
+      setSelectedOrder((prev) => (prev ? { ...prev, status: newStatus } : null));
     }
 
     setUpdatingStatus(true);
@@ -196,17 +199,17 @@ function OrdersContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (res.ok) {
-        const updated = await res.json();
-        setOrders((prev) =>
-          prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
-        );
-        if (selectedOrder && selectedOrder.id === orderId) {
-          setSelectedOrder((prev) => (prev ? { ...prev, status: newStatus } : null));
-        }
+      if (!res.ok) {
+        // Revert on failure
+        setOrders(prevOrders);
+        if (prevOrder) setSelectedOrder(prevOrder);
+        const data = await res.json().catch(() => ({}));
+        console.error('Failed to update status', data);
       }
     } catch (err) {
       console.error('Failed to update status', err);
+      setOrders(prevOrders);
+      if (prevOrder) setSelectedOrder(prevOrder);
     } finally {
       setUpdatingStatus(false);
     }
@@ -843,9 +846,10 @@ function OrdersContent() {
                           onClick={() => setStatusDropdownOpen(false)}
                         />
 
-                        <div className="absolute right-0 top-full mt-1.5 w-52 bg-white rounded-2xl shadow-xl border border-slate-200/90 py-1.5 z-30 animate-in fade-in zoom-in-95 duration-150">
-                          <div className="px-3 py-1.5 text-[10px] uppercase font-mono font-bold tracking-wider text-slate-400 border-b border-slate-100">
-                            เลือกสถานะ
+                        <div className="absolute right-0 top-full mt-1.5 w-56 bg-white rounded-2xl shadow-xl border border-slate-200/90 py-1.5 z-30 animate-in fade-in zoom-in-95 duration-150">
+                          <div className="px-3 py-1.5 text-[10px] uppercase font-mono font-bold tracking-wider text-slate-400 border-b border-slate-100 flex items-center justify-between">
+                            <span>เลือกสถานะ</span>
+                            <span className="text-[10px] text-slate-400 font-sans font-normal">คลิกเลือกได้ทันที</span>
                           </div>
                           <div className="py-1">
                             {ORDER_STATUS_CONFIG.map((opt) => {
@@ -854,17 +858,15 @@ function OrdersContent() {
                                 <button
                                   key={opt.status}
                                   type="button"
-                                  disabled={updatingStatus}
                                   onClick={() => {
-                                    setStatusDropdownOpen(false);
                                     if (!isSelected) {
                                       handleUpdateStatus(selectedOrder.id, opt.status);
                                     }
                                   }}
-                                  className={`w-full px-3 py-2 text-left flex items-center justify-between text-xs transition-colors ${
+                                  className={`w-full px-3 py-2 text-left flex items-center justify-between text-xs transition-all cursor-pointer ${
                                     isSelected
-                                      ? 'bg-slate-50 font-semibold text-slate-900'
-                                      : 'hover:bg-slate-50/80 text-slate-700 font-medium'
+                                      ? 'bg-blue-50/70 font-semibold text-blue-900'
+                                      : 'hover:bg-slate-50 text-slate-700 font-medium'
                                   }`}
                                 >
                                   <div className="flex items-center gap-2.5 min-w-0">
@@ -877,7 +879,7 @@ function OrdersContent() {
                                   {isSelected && (
                                     <FontAwesomeIcon
                                       icon={faCheck}
-                                      className="w-3 h-3 text-slate-600 shrink-0"
+                                      className="w-3.5 h-3.5 text-blue-600 shrink-0"
                                     />
                                   )}
                                 </button>
