@@ -1282,7 +1282,11 @@ function OrdersContent() {
                     </div>
                     <div className="flex justify-between text-slate-500">
                       <span>ค่าจัดส่งพัสดุ (Shipping)</span>
-                      <span className="font-mono text-slate-800">฿{viewingReceiptOrder.shippingFee.toLocaleString()}</span>
+                      <span className="font-mono text-slate-800">
+                        {viewingReceiptOrder.shippingFee === 0
+                          ? 'ฟรี (฿0)'
+                          : `฿${viewingReceiptOrder.shippingFee.toLocaleString()}`}
+                      </span>
                     </div>
                     <div className="flex justify-between text-slate-500">
                       <span>วิธีชำระเงิน (Payment)</span>
