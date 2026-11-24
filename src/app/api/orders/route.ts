@@ -2,6 +2,8 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { getRequestContext } from '@cloudflare/next-on-pages';
+import { getD1Orders } from '@/lib/d1';
 
 export const dynamic = 'force-dynamic';
 
@@ -241,6 +243,28 @@ export async function GET(req: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const format = searchParams.get('format'); // 'array' or 'object'
+
+    // Try direct D1 edge binding
+    try {
+      const ctx = getRequestContext();
+      const d1Binding = (ctx?.env as any)?.DB;
+      if (d1Binding) {
+        const d1Orders = await getD1Orders({
+          status: status || undefined,
+          search: search || undefined,
+          d1Binding,
+        });
+        if (format === 'object') {
+          return NextResponse.json({
+            orders: d1Orders,
+            total: d1Orders.length,
+          });
+        }
+        return NextResponse.json(d1Orders);
+      }
+    } catch (e) {
+      console.warn('[D1 Edge] Fallback to prisma for orders:', e);
+    }
 
     const where: Prisma.OrderWhereInput = {};
 

@@ -209,6 +209,108 @@ export async function getD1Products(options?: {
   }));
 }
 
+export async function getD1Orders(options?: {
+  status?: string;
+  search?: string;
+  d1Binding?: CloudflareD1Binding;
+}): Promise<any[]> {
+  if (options?.d1Binding) {
+    let sql = `
+      SELECT 
+        o.id, o.orderNumber, o.customerId, o.status, o.paymentStatus, o.paymentMethod,
+        o.paymentProof, o.subtotal, o.shippingFee, o.discount, o.total, o.note,
+        o.trackingNumber, o.shippingCarrier, o.createdAt, o.updatedAt,
+        c.name as customer_name, c.phone as customer_phone, c.instagram as customer_instagram, c.address as customer_address
+      FROM [Order] o
+      LEFT JOIN Customer c ON o.customerId = c.id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+
+    if (options.status && options.status !== 'ALL' && options.status !== 'all') {
+      sql += ` AND o.status = ?`;
+      params.push(options.status);
+    }
+
+    if (options.search && options.search.trim()) {
+      const q = `%${options.search.trim()}%`;
+      sql += ` AND (o.orderNumber LIKE ? OR c.name LIKE ? OR c.phone LIKE ?)`;
+      params.push(q, q, q);
+    }
+
+    sql += ` ORDER BY o.createdAt DESC`;
+
+    const stmt = options.d1Binding.prepare(sql).bind(...params);
+    const { results } = await stmt.all<any>();
+
+    // Fetch items for each order
+    const orderIds = results.map(r => r.id);
+    let itemsMap: Record<string, any[]> = {};
+
+    if (orderIds.length > 0) {
+      try {
+        const itemsStmt = options.d1Binding.prepare(`
+          SELECT oi.id, oi.orderId, oi.productId, oi.productName, oi.quantity, oi.price, oi.subtotal, oi.options,
+                 p.name as p_name, pi.imageUrl as p_image
+          FROM OrderItem oi
+          LEFT JOIN Product p ON oi.productId = p.id
+          LEFT JOIN ProductImage pi ON p.id = pi.productId AND pi.isPrimary = 1
+        `).bind();
+        const itemsRes = await itemsStmt.all<any>();
+        for (const item of itemsRes.results) {
+          if (!itemsMap[item.orderId]) itemsMap[item.orderId] = [];
+          itemsMap[item.orderId].push({
+            id: item.id,
+            orderId: item.orderId,
+            productId: item.productId,
+            productName: item.productName || item.p_name,
+            quantity: Number(item.quantity),
+            price: Number(item.price),
+            subtotal: Number(item.subtotal),
+            options: item.options ? (typeof item.options === 'string' ? JSON.parse(item.options) : item.options) : null,
+            product: {
+              id: item.productId,
+              name: item.productName || item.p_name,
+              images: item.p_image ? [{ imageUrl: item.p_image, isPrimary: true }] : []
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('Error fetching order items from D1:', err);
+      }
+    }
+
+    return results.map(row => ({
+      id: row.id,
+      orderNumber: row.orderNumber,
+      customerId: row.customerId,
+      status: row.status,
+      paymentStatus: row.paymentStatus,
+      paymentMethod: row.paymentMethod,
+      paymentProof: row.paymentProof,
+      subtotal: Number(row.subtotal),
+      shippingFee: Number(row.shippingFee),
+      discount: Number(row.discount),
+      total: Number(row.total),
+      note: row.note,
+      trackingNumber: row.trackingNumber,
+      shippingCarrier: row.shippingCarrier,
+      createdAt: new Date(row.createdAt).toISOString(),
+      updatedAt: new Date(row.updatedAt).toISOString(),
+      customer: {
+        id: row.customerId,
+        name: row.customer_name || 'ลูกค้าทั่วไป',
+        phone: row.customer_phone || '-',
+        instagram: row.customer_instagram || null,
+        address: row.customer_address || '-'
+      },
+      items: itemsMap[row.id] || []
+    }));
+  }
+
+  return [];
+}
+
 export async function getD1StoreSettings(d1Binding?: CloudflareD1Binding): Promise<StoreSettingsData | null> {
   if (d1Binding) {
     const stmt = d1Binding.prepare(`SELECT * FROM StoreSettings LIMIT 1`);

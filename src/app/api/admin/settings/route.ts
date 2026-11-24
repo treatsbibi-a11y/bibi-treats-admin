@@ -1,12 +1,26 @@
 export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getRequestContext } from '@cloudflare/next-on-pages';
+import { getD1StoreSettings } from '@/lib/d1';
 
 export const dynamic = 'force-dynamic';
 
 // GET /api/admin/settings - get store settings
 export async function GET(req: NextRequest) {
   try {
+    try {
+      const ctx = getRequestContext();
+      const d1Binding = (ctx?.env as any)?.DB;
+      if (d1Binding) {
+        const settings = await getD1StoreSettings(d1Binding);
+        if (settings) {
+          return NextResponse.json(settings);
+        }
+      }
+    } catch (e) {
+      console.warn('[D1 Edge] Fallback to prisma for settings:', e);
+    }
     let settings = await prisma.storeSettings.findUnique({
       where: { id: 'default' },
     });
