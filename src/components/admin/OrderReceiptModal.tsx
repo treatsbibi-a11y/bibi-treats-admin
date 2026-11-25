@@ -154,7 +154,7 @@ export default function OrderReceiptModal({
                   </h2>
                   <p className="text-[11px] text-slate-500">Sweet treats, happy hearts</p>
                   <div className="text-[10px] text-slate-500 font-mono pt-1 flex items-center justify-center gap-2">
-                    <span>IG: @bibis.treats.bkk</span>
+                    <span>IG: @bibi.streats</span>
                     <span>•</span>
                     <span>โทร: 086-296-5765</span>
                   </div>
