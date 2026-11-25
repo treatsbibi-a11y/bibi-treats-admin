@@ -5,6 +5,7 @@ import {
   faBoxesStacked,
   faChartLine,
   faGear,
+  faStar,
   type IconDefinition,
 } from '@fortawesome/free-solid-svg-icons';
 
@@ -62,6 +63,13 @@ export const NAV_GROUPS: AdminNavGroup[] = [
         label: 'จัดการสต็อกสินค้า',
         icon: faBoxesStacked,
         keywords: ['stock', 'inventory', 'สต็อก', 'คลัง'],
+      },
+      {
+        key: 'reviews',
+        href: '/reviews',
+        label: 'รีวิวลูกค้า',
+        icon: faStar,
+        keywords: ['reviews', 'rating', 'รีวิว', 'คะแนน', 'ความคิดเห็น'],
       },
     ],
   },
