@@ -1,19 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import {
-  faChartPie,
-  faBagShopping,
-  faBox,
-  faBoxesStacked,
-  faChartLine,
-  faGear,
-} from '@fortawesome/free-solid-svg-icons';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import AdminHeader from '@/components/admin/AdminHeader';
+import CommandPalette from '@/components/admin/CommandPalette';
+import { showToast } from '@/components/ui/Toast';
+import { OrderDetail, StoreSettingsData } from '@/types';
+
+const SIDEBAR_STORAGE_KEY = 'bibi-admin-sidebar-collapsed';
 
 export default function AdminShell({
   children,
@@ -22,111 +17,156 @@ export default function AdminShell({
 }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [pendingOrders, setPendingOrders] = useState<OrderDetail[]>([]);
+  const [storeSettings, setStoreSettings] = useState<StoreSettingsData | null>(null);
+  const [togglingStore, setTogglingStore] = useState(false);
 
-  // If on login page, render clean layout without sidebar or header
   const isLoginPage = pathname === '/login' || pathname === '/admin/login';
 
-  // Fetch pending orders count for notification badges
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+      if (saved === '1') setSidebarCollapsed(true);
+    } catch {}
+  }, []);
+
+  const toggleDesktopSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SIDEBAR_STORAGE_KEY, next ? '1' : '0');
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  // Global ⌘K / Ctrl+K shortcut
+  useEffect(() => {
+    if (isLoginPage) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCommandOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isLoginPage]);
+
+  // Fetch store settings & pending orders
   useEffect(() => {
     if (isLoginPage) return;
 
     let isMounted = true;
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/admin/settings');
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          setStoreSettings(data);
+        }
+      } catch {}
+    }
+
     async function checkPendingOrders() {
       try {
         const res = await fetch('/api/orders?status=PENDING');
-        if (res.ok) {
+        if (res.ok && isMounted) {
           const orders = await res.json();
-          if (isMounted && Array.isArray(orders)) {
-            setPendingCount(orders.length);
+          if (Array.isArray(orders)) {
+            setPendingOrders(orders);
           }
         }
-      } catch (err) {
-        // Silently catch or fallback
-      }
+      } catch {}
     }
 
+    loadSettings();
     checkPendingOrders();
-    // Poll every 30 seconds
+    const handleSettingsUpdated = (e: Event) => {
+      const detail = (e as CustomEvent<StoreSettingsData>).detail;
+      if (detail) setStoreSettings(detail);
+    };
+    window.addEventListener('bibi-settings-updated', handleSettingsUpdated);
     const interval = setInterval(checkPendingOrders, 30000);
     return () => {
       isMounted = false;
+      window.removeEventListener('bibi-settings-updated', handleSettingsUpdated);
       clearInterval(interval);
     };
   }, [isLoginPage, pathname]);
+
+  const handleToggleStoreStatus = useCallback(async () => {
+    if (!storeSettings || togglingStore) return;
+    const newStatus = !storeSettings.isStoreOpen;
+    setTogglingStore(true);
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isStoreOpen: newStatus }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setStoreSettings(updated);
+        showToast({
+          title: newStatus ? 'เปิดรับออเดอร์หน้าร้านแล้ว' : 'ปิดรับออเดอร์ชั่วคราวแล้ว',
+          variant: newStatus ? 'success' : 'warning',
+        });
+      } else {
+        showToast({ title: 'เปลี่ยนสถานะร้านค้าไม่สำเร็จ', variant: 'error' });
+      }
+    } catch {
+      showToast({ title: 'เกิดข้อผิดพลาดในการเชื่อมต่อ', variant: 'error' });
+    } finally {
+      setTogglingStore(false);
+    }
+  }, [storeSettings, togglingStore]);
 
   if (isLoginPage) {
     return <>{children}</>;
   }
 
-  const mobileNavItems = [
-    { href: '/', label: 'แดชบอร์ด', icon: faChartPie, exact: true },
-    { href: '/orders', label: 'คำสั่งซื้อ', icon: faBagShopping, badge: pendingCount > 0 ? pendingCount : undefined },
-    { href: '/products', label: 'สินค้า', icon: faBox },
-    { href: '/stock', label: 'สต็อก', icon: faBoxesStacked },
-    { href: '/reports', label: 'รายงาน', icon: faChartLine },
-    { href: '/settings', label: 'ตั้งค่า', icon: faGear },
-  ];
-
   return (
-    <div className="min-h-screen bg-[#F8FBFE] flex flex-col lg:flex-row antialiased text-slate-800">
-      {/* Sidebar Drawer Navigation */}
+    <div className="min-h-screen bg-surface-body text-ink flex flex-col lg:flex-row">
       <AdminSidebar
         isOpen={sidebarOpen}
+        isCollapsed={sidebarCollapsed}
         onClose={() => setSidebarOpen(false)}
-        pendingOrdersCount={pendingCount}
+        pendingOrdersCount={pendingOrders.length}
+        logoUrl={storeSettings?.logoUrl}
+        shopName={storeSettings?.shopName || "BIBI'S TREATS"}
       />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 lg:pl-64 transition-all duration-300">
+      <div
+        className={`flex-1 flex flex-col min-w-0 transition-all duration-200 ${
+          sidebarCollapsed
+            ? 'lg:pl-[var(--sidebar-w-collapsed)]'
+            : 'lg:pl-[var(--sidebar-w)]'
+        }`}
+      >
         <AdminHeader
-          onOpenSidebar={() => setSidebarOpen(true)}
-          pendingOrdersCount={pendingCount}
+          onOpenMobileSidebar={() => setSidebarOpen(true)}
+          onToggleDesktopSidebar={toggleDesktopSidebar}
+          onOpenCommandPalette={() => setCommandOpen(true)}
+          pendingOrders={pendingOrders}
+          storeSettings={storeSettings}
+          togglingStore={togglingStore}
+          onToggleStoreStatus={handleToggleStoreStatus}
         />
 
-        <main className="flex-1 p-3 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto pb-20 lg:pb-8">
+        <main className="flex-1 p-4 sm:p-5 lg:p-6 max-w-[1440px] w-full mx-auto">
           {children}
         </main>
       </div>
 
-      {/* Mobile & Tablet Bottom Navigation Bar (< lg) */}
-      <nav
-        aria-label="แถบนำทางด่วนสำหรับมือถือและแท็บเล็ต"
-        className="fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-1 py-1 flex items-center justify-around lg:hidden shadow-[0_-4px_20px_rgba(0,0,0,0.06)]"
-      >
-        {mobileNavItems.map((item) => {
-          const isActive = item.exact
-            ? pathname === item.href || (item.href === '/' && pathname === '/admin')
-            : pathname.startsWith(item.href) || pathname.startsWith(`/admin${item.href}`);
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`relative flex-1 min-h-[46px] py-1 px-1 flex flex-col items-center justify-center rounded-xl transition-all ${
-                isActive
-                  ? 'text-brand-600 font-bold bg-brand-50/70'
-                  : 'text-slate-500 hover:text-slate-900 active:bg-slate-100'
-              }`}
-            >
-              <div className="relative flex items-center justify-center">
-                <FontAwesomeIcon
-                  icon={item.icon}
-                  className={`w-4 h-4 transition-transform ${isActive ? 'scale-110 text-brand-600' : 'text-slate-400'}`}
-                />
-                {item.badge !== undefined && (
-                  <span className="absolute -top-1.5 -right-3 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-mono font-bold flex items-center justify-center ring-2 ring-white shadow-xs">
-                    {item.badge}
-                  </span>
-                )}
-              </div>
-              <span className={`text-[10px] mt-0.5 tracking-tight ${isActive ? 'font-bold' : 'font-medium'}`}>
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
-      </nav>
+      <CommandPalette
+        isOpen={commandOpen}
+        onClose={() => setCommandOpen(false)}
+        isStoreOpen={storeSettings?.isStoreOpen}
+        onToggleStoreStatus={handleToggleStoreStatus}
+      />
     </div>
   );
 }

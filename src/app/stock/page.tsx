@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faBoxesStacked,
@@ -8,12 +8,17 @@ import {
   faMinus,
   faMagnifyingGlass,
   faRotate,
-  faXmark,
   faCircleCheck,
   faTriangleExclamation,
   faCircleXmark,
   faCakeCandles,
 } from '@fortawesome/free-solid-svg-icons';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
+import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
+import { showToast } from '@/components/ui/Toast';
 import { ProductWithImages } from '@/types';
 
 type StockStatus = 'READY' | 'LOW' | 'OUT' | 'INACTIVE';
@@ -24,7 +29,6 @@ export default function AdminStockPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | StockStatus>('ALL');
 
-  // Quick Restock modal
   const [restockProduct, setRestockProduct] = useState<ProductWithImages | null>(null);
   const [restockAmount, setRestockAmount] = useState(10);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -39,6 +43,7 @@ export default function AdminStockPage() {
       }
     } catch (err) {
       console.error('Failed to load stock products', err);
+      showToast({ title: 'โหลดรายการสต็อกไม่สำเร็จ', variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -55,41 +60,40 @@ export default function AdminStockPage() {
     return 'READY';
   };
 
-  const getStatusBadge = (status: StockStatus) => {
+  const renderStockBadge = (status: StockStatus) => {
     switch (status) {
       case 'READY':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/70 whitespace-nowrap">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span>พร้อมขาย</span>
-          </span>
+          <Badge variant="success" dot>
+            พร้อมขาย
+          </Badge>
         );
       case 'LOW':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200/70 whitespace-nowrap">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            <span>ใกล้หมด</span>
-          </span>
+          <Badge variant="warning" dot>
+            ใกล้หมด
+          </Badge>
         );
       case 'OUT':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200/70 whitespace-nowrap">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-            <span>หมดแล้ว</span>
-          </span>
+          <Badge variant="danger" dot>
+            หมดแล้ว
+          </Badge>
         );
       case 'INACTIVE':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200/80 whitespace-nowrap">
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-            <span>ปิดการขาย</span>
-          </span>
+          <Badge variant="neutral" dot>
+            ปิดการขาย
+          </Badge>
         );
     }
   };
 
-  // Update stock quantity
-  const handleUpdateStock = async (productId: string, newStock: number) => {
+  const handleUpdateStock = async (
+    productId: string,
+    newStock: number,
+    notifySuccess = false
+  ) => {
     if (newStock < 0) return;
     setUpdatingId(productId);
     try {
@@ -102,210 +106,336 @@ export default function AdminStockPage() {
         setProducts((prev) =>
           prev.map((p) => (p.id === productId ? { ...p, stock: newStock } : p))
         );
+        if (notifySuccess) {
+          showToast({
+            title: 'เติมสต็อกสำเร็จ',
+            description: `อัปเดตจำนวนคงเหลือเป็น ${newStock} ชิ้นแล้ว`,
+            variant: 'success',
+          });
+        }
+      } else {
+        showToast({ title: 'อัปเดตสต็อกไม่สำเร็จ', variant: 'error' });
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
+      showToast({ title: 'เกิดข้อผิดพลาดในการอัปเดตสต็อก', variant: 'error' });
     } finally {
       setUpdatingId(null);
     }
   };
 
-  // Quick Restock submit
   const handleRestockSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!restockProduct) return;
     const newStock = restockProduct.stock + Number(restockAmount);
-    await handleUpdateStock(restockProduct.id, newStock);
+    await handleUpdateStock(restockProduct.id, newStock, true);
     setRestockProduct(null);
   };
 
-  const filteredProducts = products.filter((p) => {
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
-    const status = getStockStatus(p);
-    const matchStatus = statusFilter === 'ALL' || status === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  const filteredProducts = useMemo(() => {
+    const q = search.toLowerCase();
+    return products.filter((p) => {
+      const matchSearch = !q || p.name.toLowerCase().includes(q);
+      const status = getStockStatus(p);
+      const matchStatus = statusFilter === 'ALL' || status === statusFilter;
+      return matchSearch && matchStatus;
+    });
+  }, [products, search, statusFilter]);
 
-  // Calculate stats
   const totalStock = products.reduce((acc, p) => acc + (p.stock || 0), 0);
   const readyCount = products.filter((p) => getStockStatus(p) === 'READY').length;
   const lowCount = products.filter((p) => getStockStatus(p) === 'LOW').length;
   const outCount = products.filter((p) => getStockStatus(p) === 'OUT').length;
 
+  const stockColumns: DataTableColumn<ProductWithImages>[] = [
+    {
+      key: 'name',
+      header: 'เมนูขนม',
+      sortable: true,
+      sortValue: (p) => p.name,
+      render: (product) => {
+        const primaryImage =
+          product.images?.find((img) => img.isPrimary) || product.images?.[0];
+        return (
+          <div className="flex items-center gap-2.5 min-w-[180px]">
+            <div className="w-10 h-10 rounded overflow-hidden bg-surface-secondary border border-surface-border shrink-0 flex items-center justify-center">
+              {primaryImage ? (
+                <img
+                  src={primaryImage.imageUrl}
+                  alt={product.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <FontAwesomeIcon icon={faCakeCandles} className="w-4 h-4 text-ink-disabled" />
+              )}
+            </div>
+            <span className="font-semibold text-ink text-[13px]">{product.name}</span>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'category',
+      header: 'หมวดหมู่',
+      sortable: true,
+      sortValue: (p) => p.category,
+      render: (product) => (
+        <Badge variant="neutral" size="sm">
+          {product.category}
+        </Badge>
+      ),
+    },
+    {
+      key: 'price',
+      header: 'ราคาขาย',
+      align: 'right',
+      sortable: true,
+      sortValue: (p) => p.price,
+      render: (product) => (
+        <span className="font-semibold text-ink font-mono-num">฿{product.price}</span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'สถานะสต็อก',
+      sortable: true,
+      sortValue: (p) => getStockStatus(p),
+      render: (product) => renderStockBadge(getStockStatus(product)),
+    },
+    {
+      key: 'stock',
+      header: 'ขายแล้ว / คงเหลือ',
+      sortable: true,
+      sortValue: (p) => p.stock,
+      render: (product) => {
+        const sold = product.sold || 0;
+        const soldPercent = Math.min(
+          100,
+          Math.round((sold / (product.stock + sold || 1)) * 100)
+        );
+        return (
+          <div className="min-w-[155px]">
+            <div className="flex justify-between text-[11px] mb-1 font-mono-num">
+              <span className="text-ink-muted">ขาย {sold}</span>
+              <span className="font-semibold text-ink">เหลือ {product.stock}</span>
+            </div>
+            <div className="w-full h-1.5 rounded-full bg-surface-border-light overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${
+                  product.stock === 0
+                    ? 'bg-semantic-red'
+                    : product.stock <= 5
+                    ? 'bg-semantic-yellow'
+                    : 'bg-semantic-green'
+                }`}
+                style={{ width: `${Math.max(5, 100 - soldPercent)}%` }}
+              />
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'adjust',
+      header: 'ปรับจำนวนด่วน',
+      align: 'center',
+      render: (product) => (
+        <div className="inline-flex items-center gap-1 bg-surface-secondary p-0.5 rounded border border-surface-border">
+          <button
+            type="button"
+            disabled={product.stock <= 0 || updatingId === product.id}
+            onClick={() => handleUpdateStock(product.id, product.stock - 1)}
+            className="w-6 h-6 rounded-sm bg-surface hover:bg-surface-border text-ink flex items-center justify-center border border-surface-border disabled:opacity-35 transition-colors"
+            title="ลดลง 1 ชิ้น"
+            aria-label="ลด 1 ชิ้น"
+          >
+            <FontAwesomeIcon icon={faMinus} className="w-2.5 h-2.5" />
+          </button>
+
+          <input
+            type="number"
+            min="0"
+            value={product.stock}
+            onChange={(e) => {
+              const val = parseInt(e.target.value, 10);
+              if (!isNaN(val) && val >= 0) {
+                handleUpdateStock(product.id, val);
+              }
+            }}
+            className="w-11 text-center font-mono-num font-semibold text-xs bg-transparent outline-none text-ink"
+          />
+
+          <button
+            type="button"
+            disabled={updatingId === product.id}
+            onClick={() => handleUpdateStock(product.id, product.stock + 1)}
+            className="w-6 h-6 rounded-sm bg-surface hover:bg-surface-border text-ink flex items-center justify-center border border-surface-border disabled:opacity-35 transition-colors"
+            title="เพิ่ม 1 ชิ้น"
+            aria-label="เพิ่ม 1 ชิ้น"
+          >
+            <FontAwesomeIcon icon={faPlus} className="w-2.5 h-2.5" />
+          </button>
+        </div>
+      ),
+    },
+    {
+      key: 'restock',
+      header: 'เติมสต็อก',
+      align: 'right',
+      render: (product) => (
+        <Button
+          variant="outline"
+          size="xs"
+          onClick={() => {
+            setRestockProduct(product);
+            setRestockAmount(10);
+          }}
+        >
+          <FontAwesomeIcon icon={faPlus} className="w-2.5 h-2.5 text-primary-text" />
+          <span>เติมสต็อก</span>
+        </Button>
+      ),
+    },
+  ];
+
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-5 pb-8">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+          <h1 className="text-lg sm:text-xl font-semibold text-ink tracking-tight">
             จัดการสต็อกขนม
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+          <p className="text-xs sm:text-[13px] text-ink-secondary mt-0.5">
             ปรับสต็อกสินค้าแบบด่วน ตรวจสอบสถานะพร้อมขาย และเติมสต็อก
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={fetchProducts}
-          className="inline-flex items-center justify-center space-x-2 px-3.5 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-xs sm:text-sm border border-slate-200 transition-colors active:scale-95"
-        >
-          <FontAwesomeIcon icon={faRotate} className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+        <Button variant="outline" size="sm" onClick={fetchProducts} disabled={loading}>
+          <FontAwesomeIcon
+            icon={faRotate}
+            className={`w-3.5 h-3.5 text-ink-muted ${loading ? 'animate-spin' : ''}`}
+          />
           <span>รีเฟรชสต็อก</span>
-        </button>
+        </Button>
       </div>
 
       {/* Quick Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <Card className="p-4 flex items-center justify-between gap-3">
           <div>
-            <div className="text-xs font-medium text-slate-500">คงเหลือทั้งหมด</div>
-            <div className="text-xl sm:text-2xl font-bold text-slate-900 font-mono mt-1">
+            <div className="text-xs font-medium text-ink-muted">คงเหลือทั้งหมด</div>
+            <div className="text-xl sm:text-2xl font-semibold text-ink font-mono-num mt-1">
               {totalStock.toLocaleString()}
             </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">ชิ้น พร้อมส่ง</div>
+            <div className="text-[11px] text-ink-muted mt-0.5">ชิ้น พร้อมส่ง</div>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded bg-surface-secondary text-ink-secondary flex items-center justify-center shrink-0">
             <FontAwesomeIcon icon={faBoxesStacked} className="w-4 h-4" />
           </div>
-        </div>
+        </Card>
 
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+        <Card className="p-4 flex items-center justify-between gap-3">
           <div>
-            <div className="text-xs font-medium text-slate-500">พร้อมขาย (&gt;5)</div>
-            <div className="text-xl sm:text-2xl font-bold text-emerald-600 font-mono mt-1">
+            <div className="text-xs font-medium text-ink-muted">พร้อมขาย (&gt;5)</div>
+            <div className="text-xl sm:text-2xl font-semibold text-semantic-green font-mono-num mt-1">
               {readyCount}
             </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">เมนูในระบบ</div>
+            <div className="text-[11px] text-ink-muted mt-0.5">เมนูในระบบ</div>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded bg-semantic-green-lt text-semantic-green flex items-center justify-center shrink-0">
             <FontAwesomeIcon icon={faCircleCheck} className="w-4 h-4" />
           </div>
-        </div>
+        </Card>
 
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+        <Card className="p-4 flex items-center justify-between gap-3">
           <div>
-            <div className="text-xs font-medium text-slate-500">ใกล้หมด (1-5)</div>
-            <div className="text-xl sm:text-2xl font-bold text-amber-600 font-mono mt-1">
+            <div className="text-xs font-medium text-ink-muted">ใกล้หมด (1-5)</div>
+            <div className="text-xl sm:text-2xl font-semibold text-semantic-yellow font-mono-num mt-1">
               {lowCount}
             </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">ควรเติมเพิ่ม</div>
+            <div className="text-[11px] text-ink-muted mt-0.5">ควรเติมเพิ่ม</div>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded bg-semantic-yellow-lt text-semantic-yellow flex items-center justify-center shrink-0">
             <FontAwesomeIcon icon={faTriangleExclamation} className="w-4 h-4" />
           </div>
-        </div>
+        </Card>
 
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+        <Card className="p-4 flex items-center justify-between gap-3">
           <div>
-            <div className="text-xs font-medium text-slate-500">หมดสต็อก (0)</div>
-            <div className="text-xl sm:text-2xl font-bold text-rose-600 font-mono mt-1">
+            <div className="text-xs font-medium text-ink-muted">หมดสต็อก (0)</div>
+            <div className="text-xl sm:text-2xl font-semibold text-semantic-red font-mono-num mt-1">
               {outCount}
             </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">ปิดรับออเดอร์</div>
+            <div className="text-[11px] text-ink-muted mt-0.5">ปิดรับออเดอร์</div>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded bg-semantic-red-lt text-semantic-red flex items-center justify-center shrink-0">
             <FontAwesomeIcon icon={faCircleXmark} className="w-4 h-4" />
           </div>
-        </div>
+        </Card>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* Filter & Search Bar */}
+      <Card className="p-3.5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="relative flex-1">
-            <FontAwesomeIcon icon={faMagnifyingGlass} className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <FontAwesomeIcon
+              icon={faMagnifyingGlass}
+              className="w-3.5 h-3.5 text-ink-muted absolute left-3 top-1/2 -translate-y-1/2"
+            />
             <input
               type="text"
               placeholder="ค้นหาชื่อขนม เพื่อปรับสต็อก..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 focus:border-slate-400 focus:ring-1 focus:ring-slate-400 outline-none text-xs sm:text-sm bg-slate-50/50"
+              className="w-full pl-9 pr-3.5 py-2 rounded border border-surface-border focus:border-primary focus:ring-1 focus:ring-primary outline-none text-xs sm:text-[13px] bg-surface-secondary text-ink placeholder:text-ink-muted"
             />
           </div>
 
-          {/* Status Tabs */}
-          <div className="flex items-center space-x-1.5 overflow-x-auto p-1 touch-scroll custom-scrollbar">
-            <button
-              type="button"
-              onClick={() => setStatusFilter('ALL')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${
-                statusFilter === 'ALL'
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              ทั้งหมด ({products.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('READY')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${
-                statusFilter === 'READY'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              พร้อมขาย ({readyCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('LOW')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${
-                statusFilter === 'LOW'
-                  ? 'bg-amber-600 text-white shadow-xs'
-                  : 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              ใกล้หมด ({lowCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('OUT')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${
-                statusFilter === 'OUT'
-                  ? 'bg-rose-600 text-white shadow-xs'
-                  : 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              หมดแล้ว ({outCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('INACTIVE')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${
-                statusFilter === 'INACTIVE'
-                  ? 'bg-slate-700 text-white shadow-xs'
-                  : 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              ปิดการขาย
-            </button>
+          <div className="flex items-center gap-1.5 overflow-x-auto touch-scroll no-scrollbar pb-0.5">
+            {(
+              [
+                { key: 'ALL', label: `ทั้งหมด (${products.length})` },
+                { key: 'READY', label: `พร้อมขาย (${readyCount})` },
+                { key: 'LOW', label: `ใกล้หมด (${lowCount})` },
+                { key: 'OUT', label: `หมดแล้ว (${outCount})` },
+                { key: 'INACTIVE', label: 'ปิดการขาย' },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setStatusFilter(tab.key)}
+                className={`px-3 py-1.5 rounded text-xs font-medium whitespace-nowrap transition-colors border ${
+                  statusFilter === tab.key
+                    ? 'bg-primary text-white border-primary'
+                    : 'bg-surface-secondary text-ink-secondary border-surface-border hover:text-ink'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* ==================================================== */}
-      {/* MOBILE & TABLET STOCK CARDS (< 1024px)              */}
-      {/* ==================================================== */}
-      <div className="lg:hidden space-y-3">
+      {/* Mobile Cards (< lg) */}
+      <div className="lg:hidden space-y-2.5">
         {filteredProducts.length > 0 ? (
           filteredProducts.map((product) => {
             const status = getStockStatus(product);
             const primaryImage =
               product.images?.find((img) => img.isPrimary) || product.images?.[0];
             const sold = product.sold || 0;
-            const soldPercent = Math.min(100, Math.round((sold / (product.stock + sold || 1)) * 100));
+            const soldPercent = Math.min(
+              100,
+              Math.round((sold / (product.stock + sold || 1)) * 100)
+            );
 
             return (
-              <div
-                key={product.id}
-                className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs space-y-3.5"
-              >
-                {/* Top Row: Thumbnail + Title + Category + Status */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 min-w-0">
-                    <div className="w-14 h-14 rounded-xl overflow-hidden bg-slate-50 border border-slate-200/70 shrink-0 flex items-center justify-center">
+              <Card key={product.id} className="p-3.5 space-y-3">
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <div className="w-12 h-12 rounded overflow-hidden bg-surface-secondary border border-surface-border shrink-0 flex items-center justify-center">
                       {primaryImage ? (
                         <img
                           src={primaryImage.imageUrl}
@@ -313,68 +443,57 @@ export default function AdminStockPage() {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <FontAwesomeIcon icon={faCakeCandles} className="w-4 h-4 text-slate-300" />
+                        <FontAwesomeIcon
+                          icon={faCakeCandles}
+                          className="w-4 h-4 text-ink-disabled"
+                        />
                       )}
                     </div>
                     <div className="min-w-0">
-                      <h4 className="font-semibold text-slate-900 text-sm tracking-tight truncate">
-                        {product.name}
-                      </h4>
+                      <h3 className="font-semibold text-ink text-sm truncate">{product.name}</h3>
                       <div className="mt-1 flex items-center gap-2">
-                        <span className="inline-block whitespace-nowrap text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">
+                        <Badge variant="neutral" size="sm">
                           {product.category}
-                        </span>
-                        <span className="font-semibold text-slate-900 font-mono text-xs whitespace-nowrap">
+                        </Badge>
+                        <span className="font-semibold text-ink font-mono-num text-xs">
                           ฿{product.price}
                         </span>
                       </div>
                     </div>
                   </div>
-
-                  <div className="shrink-0">
-                    {getStatusBadge(status)}
-                  </div>
+                  {renderStockBadge(status)}
                 </div>
 
-                {/* Stock Ratio & Progress Bar */}
-                <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-200/60 space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500 font-mono">
-                      ขายแล้ว {sold} ชิ้น
-                    </span>
-                    <span className="font-bold text-slate-900 font-mono">
-                      คงเหลือ {product.stock} ชิ้น
-                    </span>
+                <div className="bg-surface-secondary p-2.5 rounded border border-surface-border-light space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-mono-num">
+                    <span className="text-ink-muted">ขายแล้ว {sold} ชิ้น</span>
+                    <span className="font-semibold text-ink">คงเหลือ {product.stock} ชิ้น</span>
                   </div>
-                  <div className="w-full h-1.5 rounded-full bg-slate-200/70 overflow-hidden">
+                  <div className="w-full h-1.5 rounded-full bg-surface-border-light overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-300 ${
                         product.stock === 0
-                          ? 'bg-rose-500'
+                          ? 'bg-semantic-red'
                           : product.stock <= 5
-                          ? 'bg-amber-400'
-                          : 'bg-emerald-500'
+                          ? 'bg-semantic-yellow'
+                          : 'bg-semantic-green'
                       }`}
                       style={{ width: `${Math.max(5, 100 - soldPercent)}%` }}
                     />
                   </div>
                 </div>
 
-                {/* Bottom Row: Touch-friendly Quick Stepper + Restock Button */}
-                <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
-                  {/* Stepper Controls */}
-                  <div className="inline-flex items-center space-x-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-surface-border-light">
+                  <div className="inline-flex items-center gap-1 bg-surface-secondary p-0.5 rounded border border-surface-border">
                     <button
                       type="button"
                       disabled={product.stock <= 0 || updatingId === product.id}
                       onClick={() => handleUpdateStock(product.id, product.stock - 1)}
-                      className="w-8 h-8 rounded-lg bg-white hover:bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-sm shadow-2xs border border-slate-200/70 transition-all active:scale-95 disabled:opacity-30"
-                      title="ลด 1 ชิ้น"
+                      className="w-8 h-8 rounded-sm bg-surface hover:bg-surface-border text-ink flex items-center justify-center border border-surface-border disabled:opacity-35"
                       aria-label="ลดสต็อก 1 ชิ้น"
                     >
                       <FontAwesomeIcon icon={faMinus} className="w-2.5 h-2.5" />
                     </button>
-
                     <input
                       type="number"
                       min="0"
@@ -385,289 +504,131 @@ export default function AdminStockPage() {
                           handleUpdateStock(product.id, val);
                         }
                       }}
-                      className="w-12 text-center font-mono font-bold text-sm bg-transparent outline-none text-slate-900"
+                      className="w-11 text-center font-mono-num font-semibold text-sm bg-transparent outline-none text-ink"
                     />
-
                     <button
                       type="button"
                       disabled={updatingId === product.id}
                       onClick={() => handleUpdateStock(product.id, product.stock + 1)}
-                      className="w-8 h-8 rounded-lg bg-white hover:bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-sm shadow-2xs border border-slate-200/70 transition-all active:scale-95"
-                      title="เพิ่ม 1 ชิ้น"
+                      className="w-8 h-8 rounded-sm bg-surface hover:bg-surface-border text-ink flex items-center justify-center border border-surface-border"
                       aria-label="เพิ่มสต็อก 1 ชิ้น"
                     >
                       <FontAwesomeIcon icon={faPlus} className="w-2.5 h-2.5" />
                     </button>
                   </div>
 
-                  {/* Restock Trigger Button */}
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary"
+                    size="sm"
                     onClick={() => {
                       setRestockProduct(product);
                       setRestockAmount(10);
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium transition-colors active:scale-95 shadow-xs shrink-0"
                   >
-                    <FontAwesomeIcon icon={faPlus} className="w-2.5 h-2.5" />
+                    <FontAwesomeIcon icon={faPlus} className="w-3 h-3" />
                     <span>เติมสต็อก</span>
-                  </button>
+                  </Button>
                 </div>
-              </div>
+              </Card>
             );
           })
         ) : (
-          <div className="bg-white rounded-2xl p-8 text-center text-slate-400 text-xs border border-slate-200/80">
+          <Card className="p-8 text-center text-ink-muted text-xs">
             {loading ? 'กำลังโหลดรายการสต็อก...' : 'ไม่พบรายการขนมตามเงื่อนไขที่เลือก'}
-          </div>
+          </Card>
         )}
       </div>
 
-      {/* ==================================================== */}
-      {/* DESKTOP TABLE (Visible on screens >= 1024px)         */}
-      {/* ==================================================== */}
-      <div className="hidden lg:block bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto touch-scroll">
-          <table className="w-full min-w-[850px] text-left text-sm text-slate-600">
-            <thead className="bg-slate-50/80 text-[11px] font-semibold uppercase tracking-wider text-slate-500 border-b border-slate-200/80">
-              <tr>
-                <th className="px-5 py-3.5 whitespace-nowrap">เมนูขนม</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">หมวดหมู่</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">ราคาขาย</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">สถานะสต็อก</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">สัดส่วนขายแล้ว / คงเหลือ</th>
-                <th className="px-5 py-3.5 text-center whitespace-nowrap">ปรับจำนวนสต็อกด่วน</th>
-                <th className="px-5 py-3.5 text-right whitespace-nowrap">เติมสต็อก</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredProducts.length > 0 ? (
-                filteredProducts.map((product) => {
-                  const status = getStockStatus(product);
-                  const primaryImage =
-                    product.images?.find((img) => img.isPrimary) || product.images?.[0];
-                  const sold = product.sold || 0;
-                  const soldPercent = Math.min(100, Math.round((sold / (product.stock + sold || 1)) * 100));
-
-                  return (
-                    <tr key={product.id} className="bg-white hover:bg-slate-50/70 transition-colors">
-                      {/* Name & Photo */}
-                      <td className="px-5 py-3.5 whitespace-nowrap">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-11 h-11 rounded-xl overflow-hidden bg-slate-50 border border-slate-200/70 shrink-0 flex items-center justify-center">
-                            {primaryImage ? (
-                              <img
-                                src={primaryImage.imageUrl}
-                                alt={product.name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <FontAwesomeIcon icon={faCakeCandles} className="w-4 h-4 text-slate-300" />
-                            )}
-                          </div>
-                          <div>
-                            <div className="font-semibold text-slate-900 text-sm whitespace-nowrap">
-                              {product.name}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Category */}
-                      <td className="px-5 py-3.5 whitespace-nowrap">
-                        <span className="inline-block whitespace-nowrap px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium">
-                          {product.category}
-                        </span>
-                      </td>
-
-                      {/* Price */}
-                      <td className="px-5 py-3.5 font-semibold text-slate-900 font-mono whitespace-nowrap">
-                        ฿{product.price}
-                      </td>
-
-                      {/* Status Badge */}
-                      <td className="px-5 py-3.5 whitespace-nowrap">
-                        {getStatusBadge(status)}
-                      </td>
-
-                      {/* Ratio Bar */}
-                      <td className="px-5 py-3.5 min-w-[170px] whitespace-nowrap">
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-slate-400 font-mono text-[11px]">ขายแล้ว {sold}</span>
-                          <span className="font-semibold text-slate-900 font-mono text-[11px]">คงเหลือ {product.stock}</span>
-                        </div>
-                        <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-300 ${
-                              product.stock === 0
-                                ? 'bg-rose-500'
-                                : product.stock <= 5
-                                ? 'bg-amber-400'
-                                : 'bg-emerald-500'
-                            }`}
-                            style={{ width: `${Math.max(5, 100 - soldPercent)}%` }}
-                          />
-                        </div>
-                      </td>
-
-                      {/* Quick Adjust (+ / - / input) */}
-                      <td className="px-5 py-3.5 text-center whitespace-nowrap">
-                        <div className="inline-flex items-center space-x-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
-                          <button
-                            type="button"
-                            disabled={product.stock <= 0 || updatingId === product.id}
-                            onClick={() => handleUpdateStock(product.id, product.stock - 1)}
-                            className="w-7 h-7 rounded-lg bg-white hover:bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs shadow-2xs border border-slate-200/70 transition-all disabled:opacity-30 active:scale-95"
-                            title="ลดลง 1 ชิ้น"
-                            aria-label="ลด 1 ชิ้น"
-                          >
-                            <FontAwesomeIcon icon={faMinus} className="w-2.5 h-2.5" />
-                          </button>
-
-                          <input
-                            type="number"
-                            min="0"
-                            value={product.stock}
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value, 10);
-                              if (!isNaN(val) && val >= 0) {
-                                handleUpdateStock(product.id, val);
-                              }
-                            }}
-                            className="w-12 text-center font-mono font-bold text-xs bg-transparent outline-none text-slate-900"
-                          />
-
-                          <button
-                            type="button"
-                            disabled={updatingId === product.id}
-                            onClick={() => handleUpdateStock(product.id, product.stock + 1)}
-                            className="w-7 h-7 rounded-lg bg-white hover:bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs shadow-2xs border border-slate-200/70 transition-all active:scale-95"
-                            title="เพิ่ม 1 ชิ้น"
-                            aria-label="เพิ่ม 1 ชิ้น"
-                          >
-                            <FontAwesomeIcon icon={faPlus} className="w-2.5 h-2.5" />
-                          </button>
-                        </div>
-                      </td>
-
-                      {/* Restock Button */}
-                      <td className="px-5 py-3.5 text-right whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRestockProduct(product);
-                            setRestockAmount(10);
-                          }}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 text-xs font-medium transition-colors border border-slate-200/80 active:scale-95"
-                        >
-                          <FontAwesomeIcon icon={faPlus} className="w-2.5 h-2.5 text-slate-400" />
-                          <span>เติมสต็อก</span>
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={7} className="text-center py-12 text-slate-400 text-xs">
-                    {loading ? 'กำลังโหลดรายการสต็อก...' : 'ไม่พบรายการขนมตามเงื่อนไขที่เลือก'}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* Desktop DataTable (>= lg) */}
+      <div className="hidden lg:block">
+        <DataTable
+          data={filteredProducts}
+          columns={stockColumns}
+          rowKey={(p) => p.id}
+          loading={loading}
+          loadingMessage="กำลังโหลดรายการสต็อก..."
+          emptyMessage="ไม่พบรายการขนมตามเงื่อนไขที่เลือก"
+          defaultPageSize={10}
+          minWidthClass="min-w-[820px]"
+        />
       </div>
 
       {/* Quick Restock Modal */}
-      {restockProduct && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-sm w-[95%] sm:w-full p-5 sm:p-6 shadow-2xl border border-slate-200/80 relative animate-in zoom-in-95 max-h-[88vh] overflow-y-auto touch-scroll">
-            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
-              <h3 className="text-base font-bold text-slate-900 tracking-tight">
-                เติมสต็อกด่วน
-              </h3>
-              <button
-                type="button"
-                onClick={() => setRestockProduct(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-                aria-label="ปิด"
-              >
-                <FontAwesomeIcon icon={faXmark} className="w-4 h-4" />
-              </button>
+      <Modal
+        isOpen={Boolean(restockProduct)}
+        onClose={() => setRestockProduct(null)}
+        size="sm"
+        title="เติมสต็อกด่วน"
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setRestockProduct(null)}>
+              ยกเลิก
+            </Button>
+            <Button type="submit" form="restock-form" variant="primary" size="sm">
+              บันทึกเติมสต็อก
+            </Button>
+          </>
+        }
+      >
+        {restockProduct && (
+          <form id="restock-form" onSubmit={handleRestockSubmit} className="space-y-4">
+            <div className="bg-surface-secondary p-3 rounded border border-surface-border-light text-xs space-y-1">
+              <p className="text-ink-muted">
+                ขนม: <strong className="text-ink font-semibold">{restockProduct.name}</strong>
+              </p>
+              <p className="text-ink-muted">
+                สต็อกปัจจุบัน:{' '}
+                <span className="font-semibold text-ink font-mono-num">
+                  {restockProduct.stock} ชิ้น
+                </span>
+              </p>
             </div>
 
-            <form onSubmit={handleRestockSubmit} className="mt-4 space-y-4">
-              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-200/60 text-xs space-y-1">
-                <p className="text-slate-500">
-                  ขนม: <strong className="text-slate-900 font-semibold">{restockProduct.name}</strong>
-                </p>
-                <p className="text-slate-500">
-                  สต็อกปัจจุบัน: <span className="font-bold text-slate-900 font-mono">{restockProduct.stock} ชิ้น</span>
-                </p>
+            <div>
+              <label className="block text-xs font-medium text-ink-secondary mb-2">
+                เลือกจำนวนที่ต้องการเติมเพิ่ม:
+              </label>
+              <div className="grid grid-cols-4 gap-2 mb-3">
+                {[5, 10, 20, 50].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => setRestockAmount(amt)}
+                    className={`py-1.5 rounded text-xs font-mono-num font-semibold border transition-colors ${
+                      restockAmount === amt
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-surface-secondary text-ink-secondary border-surface-border hover:text-ink'
+                    }`}
+                  >
+                    +{amt}
+                  </button>
+                ))}
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-2">
-                  เลือกจำนวนที่ต้องการเติมเพิ่ม:
-                </label>
-                <div className="grid grid-cols-4 gap-2 mb-3">
-                  {[5, 10, 20, 50].map((amt) => (
-                    <button
-                      key={amt}
-                      type="button"
-                      onClick={() => setRestockAmount(amt)}
-                      className={`py-2 rounded-xl text-xs font-mono font-bold transition-all border flex items-center justify-center active:scale-95 ${
-                        restockAmount === amt
-                          ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                          : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100'
-                      }`}
-                    >
-                      +{amt}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs text-slate-500">หรือระบุ:</span>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={restockAmount}
-                    onChange={(e) => setRestockAmount(Number(e.target.value))}
-                    className="flex-1 px-3 py-2 rounded-xl border border-slate-200 focus:border-slate-400 focus:ring-1 focus:ring-slate-400 outline-none text-sm font-mono font-bold text-slate-900"
-                  />
-                  <span className="text-xs text-slate-500 font-medium">ชิ้น</span>
-                </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-ink-muted">หรือระบุ:</span>
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  autoFocus
+                  value={restockAmount}
+                  onChange={(e) => setRestockAmount(Number(e.target.value))}
+                  className="flex-1 px-3 py-1.5 rounded border border-surface-border focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm font-mono-num font-semibold bg-surface text-ink"
+                />
+                <span className="text-xs text-ink-secondary font-medium">ชิ้น</span>
               </div>
+            </div>
 
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70 text-xs text-slate-600 flex items-center justify-between">
-                <span>สต็อกใหม่จะเป็น:</span>
-                <strong className="text-slate-900 font-bold font-mono text-sm">
-                  {restockProduct.stock + Number(restockAmount)} ชิ้น
-                </strong>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setRestockProduct(null)}
-                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-medium transition-colors"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium transition-all shadow-xs active:scale-95"
-                >
-                  บันทึกเติมสต็อก
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            <div className="p-3 rounded bg-primary-lt border border-primary/25 text-xs text-ink-secondary flex items-center justify-between">
+              <span>สต็อกใหม่จะเป็น:</span>
+              <strong className="text-primary-text font-bold font-mono-num text-sm">
+                {restockProduct.stock + Number(restockAmount)} ชิ้น
+              </strong>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

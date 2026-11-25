@@ -5,40 +5,31 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faChartPie,
-  faBagShopping,
-  faBox,
-  faBoxesStacked,
-  faChartLine,
-  faGear,
   faArrowUpRightFromSquare,
   faRightFromBracket,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
+import { NAV_GROUPS, isNavItemActive } from '@/lib/admin-nav';
 
 interface AdminSidebarProps {
   isOpen?: boolean;
+  isCollapsed?: boolean;
   onClose?: () => void;
   pendingOrdersCount?: number;
+  logoUrl?: string | null;
+  shopName?: string;
 }
 
 export default function AdminSidebar({
   isOpen = false,
+  isCollapsed = false,
   onClose,
   pendingOrdersCount = 0,
+  logoUrl = null,
+  shopName = "BIBI'S TREATS",
 }: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [logoUrl, setLogoUrl] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    fetch('/api/settings')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.logoUrl) setLogoUrl(data.logoUrl);
-      })
-      .catch(() => {});
-  }, []);
 
   const handleLogout = async () => {
     try {
@@ -51,78 +42,54 @@ export default function AdminSidebar({
     }
   };
 
-  const navItems = [
-    {
-      href: '/',
-      label: 'ภาพรวมร้านค้า',
-      icon: faChartPie,
-      exact: true,
-    },
-    {
-      href: '/orders',
-      label: 'รายการคำสั่งซื้อ',
-      icon: faBagShopping,
-      badge: pendingOrdersCount > 0 ? pendingOrdersCount : undefined,
-    },
-    {
-      href: '/products',
-      label: 'สินค้าและรูปภาพ',
-      icon: faBox,
-    },
-    {
-      href: '/stock',
-      label: 'จัดการสต็อกสินค้า',
-      icon: faBoxesStacked,
-    },
-    {
-      href: '/reports',
-      label: 'รายงานยอดขาย',
-      icon: faChartLine,
-    },
-    {
-      href: '/settings',
-      label: 'ตั้งค่าร้านค้า',
-      icon: faGear,
-    },
-  ];
-
   return (
     <>
-      {/* Mobile Backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-950/60 lg:hidden backdrop-blur-sm animate-in fade-in duration-150"
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden backdrop-blur-[1px] animate-in fade-in duration-150"
           onClick={onClose}
           aria-hidden="true"
         />
       )}
 
-      {/* Sidebar Container */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 w-[280px] max-w-[85vw] lg:w-64 h-[100dvh] max-h-[100dvh] bg-slate-950 text-slate-300 border-r border-slate-800/80 flex flex-col justify-between transition-transform duration-200 ease-in-out lg:translate-x-0 shadow-2xl lg:shadow-none ${
+        aria-label="เมนูหลักผู้ดูแลระบบ"
+        className={`fixed top-0 bottom-0 left-0 z-50 w-[252px] max-w-[85vw] ${
+          isCollapsed ? 'lg:w-[var(--sidebar-w-collapsed)]' : 'lg:w-[var(--sidebar-w)]'
+        } h-[100dvh] max-h-[100dvh] bg-sidebar-bg text-sidebar-text border-r border-sidebar-border flex flex-col justify-between transition-all duration-200 ease-in-out lg:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Brand Header */}
-        <div className="h-16 px-4 sm:px-5 border-b border-slate-800 flex items-center justify-between flex-shrink-0">
-          <Link href="/" onClick={onClose} className="flex items-center gap-2.5">
+        <div
+          className={`h-14 border-b border-sidebar-border flex items-center shrink-0 ${
+            isCollapsed ? 'lg:justify-center lg:px-2 px-4 justify-between' : 'px-4 justify-between'
+          }`}
+        >
+          <Link
+            href="/"
+            onClick={onClose}
+            className="flex items-center gap-2.5 min-w-0"
+            title={shopName}
+          >
             {logoUrl ? (
               <img
                 src={logoUrl}
-                alt="Logo"
-                className="w-8 h-8 rounded-lg object-cover bg-white shadow-sm"
+                alt={shopName}
+                className="w-8 h-8 rounded object-cover bg-white shrink-0 border border-white/10"
               />
             ) : (
-              <div className="w-8 h-8 rounded-lg bg-amber-400 flex items-center justify-center text-slate-950 font-bold text-xs shadow-sm">
+              <div className="w-8 h-8 rounded bg-primary flex items-center justify-center text-white font-bold text-xs shrink-0">
                 BT
               </div>
             )}
-            <div>
-              <span className="font-bold text-sm text-white tracking-tight">
-                BIBI&apos;S TREATS
+
+            <div className={`min-w-0 ${isCollapsed ? 'lg:hidden' : ''}`}>
+              <span className="font-semibold text-[13px] text-sidebar-text-active tracking-tight block truncate">
+                {shopName.toUpperCase()}
               </span>
-              <span className="block text-[10px] text-slate-400 font-mono uppercase tracking-wider">
-                Operations Console
+              <span className="block text-[10px] text-sidebar-text font-mono uppercase tracking-wider leading-tight">
+                Admin Console
               </span>
             </div>
           </Link>
@@ -131,69 +98,112 @@ export default function AdminSidebar({
             <button
               type="button"
               onClick={onClose}
-              className="lg:hidden p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              className="lg:hidden p-2 min-h-[38px] min-w-[38px] flex items-center justify-center rounded text-sidebar-text hover:text-sidebar-text-active hover:bg-sidebar-hover transition-colors"
               aria-label="ปิดเมนู"
             >
-              <FontAwesomeIcon icon={faXmark} className="w-5 h-5" />
+              <FontAwesomeIcon icon={faXmark} className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        {/* Navigation Links */}
-        <div className="flex-1 px-3 py-4 sm:py-6 space-y-1.5 overflow-y-auto touch-scroll">
-          <div className="px-3 pb-2 text-[10px] font-mono uppercase tracking-widest text-slate-500 font-semibold">
-            ระบบจัดการ
-          </div>
-
-          {navItems.map((item) => {
-            const isActive = item.exact
-              ? pathname === item.href || (item.href === '/' && pathname === '/admin')
-              : pathname.startsWith(item.href) || pathname.startsWith(`/admin${item.href}`);
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onClose}
-                className={`flex items-center justify-between px-3.5 py-2.5 min-h-[44px] rounded-xl text-xs font-semibold transition-all ${
-                  isActive
-                    ? 'bg-slate-900 text-white border-l-2 border-amber-400 shadow-sm'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-900/60 active:bg-slate-900'
+        {/* Grouped Navigation */}
+        <nav className="flex-1 px-2.5 py-3 overflow-y-auto touch-scroll space-y-4">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.key} className="space-y-1">
+              {isCollapsed ? (
+                <div className="hidden lg:block mx-2 my-2 border-t border-sidebar-border" />
+              ) : null}
+              <div
+                className={`px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-text/70 ${
+                  isCollapsed ? 'lg:hidden' : ''
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <FontAwesomeIcon icon={item.icon} className={`w-4 h-4 ${isActive ? 'text-amber-400' : 'text-slate-400'}`} />
-                  <span>{item.label}</span>
-                </div>
+                {group.label}
+              </div>
 
-                {item.badge !== undefined && (
-                  <span className="bg-amber-400 text-slate-950 text-[10px] font-mono px-2 py-0.5 rounded-full font-extrabold shadow-xs">
-                    {item.badge}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
-        </div>
+              {group.items.map((item) => {
+                const isActive = isNavItemActive(pathname, item);
+                const badgeCount =
+                  item.key === 'orders' && pendingOrdersCount > 0
+                    ? pendingOrdersCount
+                    : undefined;
+
+                return (
+                  <Link
+                    key={item.key}
+                    href={item.href}
+                    onClick={onClose}
+                    title={isCollapsed ? item.label : undefined}
+                    className={`relative group flex items-center ${
+                      isCollapsed ? 'lg:justify-center lg:px-0 px-3 justify-between' : 'justify-between px-3'
+                    } py-2 min-h-[38px] rounded text-[13px] font-medium transition-colors ${
+                      isActive
+                        ? 'bg-sidebar-active text-sidebar-text-active border-l-[3px] border-primary'
+                        : 'text-sidebar-text hover:text-sidebar-text-hover hover:bg-sidebar-hover border-l-[3px] border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <FontAwesomeIcon
+                        icon={item.icon}
+                        className={`w-4 h-4 shrink-0 ${
+                          isActive
+                            ? 'text-primary'
+                            : 'text-sidebar-text group-hover:text-sidebar-text-hover'
+                        }`}
+                      />
+                      <span className={`truncate ${isCollapsed ? 'lg:hidden' : ''}`}>
+                        {item.label}
+                      </span>
+                    </div>
+
+                    {badgeCount !== undefined && (
+                      <span
+                        className={`bg-primary text-white text-[10px] font-mono-num font-semibold rounded-full ${
+                          isCollapsed
+                            ? 'lg:absolute lg:top-1.5 lg:right-1.5 lg:w-2 lg:h-2 lg:p-0 lg:text-[0px] px-1.5 py-0.5'
+                            : 'px-1.5 py-0.5 leading-none'
+                        }`}
+                      >
+                        {badgeCount}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
 
         {/* Footer Actions */}
-        <div className="p-4 pb-6 sm:pb-4 border-t border-slate-800/80 space-y-1.5 flex-shrink-0 bg-slate-950">
+        <div className="p-2.5 border-t border-sidebar-border space-y-1 shrink-0 bg-sidebar-bg">
           <Link
             href={process.env.NEXT_PUBLIC_STOREFRONT_URL || 'http://localhost:3002'}
             target="_blank"
-            className="flex items-center justify-between px-3.5 py-2.5 min-h-[42px] text-xs font-medium text-slate-400 hover:text-white rounded-xl hover:bg-slate-900/60 transition-colors"
+            rel="noopener noreferrer"
+            title={isCollapsed ? 'ดูหน้าร้านออนไลน์' : undefined}
+            className={`flex items-center ${
+              isCollapsed ? 'lg:justify-center lg:px-0 px-3 justify-between' : 'justify-between px-3'
+            } py-2 min-h-[36px] text-xs font-medium text-sidebar-text hover:text-sidebar-text-active rounded hover:bg-sidebar-hover transition-colors`}
           >
-            <span>ดูหน้าร้านออนไลน์</span>
-            <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="w-3.5 h-3.5 text-slate-500" />
+            <span className={`truncate ${isCollapsed ? 'lg:hidden' : ''}`}>
+              ดูหน้าร้านออนไลน์
+            </span>
+            <FontAwesomeIcon
+              icon={faArrowUpRightFromSquare}
+              className="w-3.5 h-3.5 shrink-0 opacity-80"
+            />
           </Link>
 
           <button
             type="button"
             onClick={handleLogout}
-            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 min-h-[42px] text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 rounded-xl transition-colors active:scale-98"
+            title={isCollapsed ? 'ออกจากระบบ' : undefined}
+            className={`w-full flex items-center ${
+              isCollapsed ? 'lg:justify-center lg:px-0 px-3' : 'px-3'
+            } gap-2.5 py-2 min-h-[36px] text-xs font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 rounded transition-colors`}
           >
-            <FontAwesomeIcon icon={faRightFromBracket} className="w-4 h-4" />
-            <span>ออกจากระบบ</span>
+            <FontAwesomeIcon icon={faRightFromBracket} className="w-3.5 h-3.5 shrink-0" />
+            <span className={isCollapsed ? 'lg:hidden' : ''}>ออกจากระบบ</span>
           </button>
         </div>
       </aside>

@@ -15,8 +15,8 @@ export function Card({
 }: CardProps) {
   return (
     <div
-      className={`bg-white rounded-card border border-slate-200/80 shadow-card ${
-        hoverable ? 'transition-all duration-200 hover:shadow-hover hover:border-slate-300' : ''
+      className={`bg-surface rounded-card shadow-card ${
+        hoverable ? 'transition-colors duration-150 hover:bg-surface-secondary/40' : ''
       } ${className}`}
       {...props}
     >
@@ -33,7 +33,7 @@ export function CardHeader({
   className?: string;
 }) {
   return (
-    <div className={`px-5 py-4 border-b border-slate-100 ${className}`}>
+    <div className={`px-4 py-3 border-b border-surface-border-light ${className}`}>
       {children}
     </div>
   );
@@ -46,7 +46,7 @@ export function CardBody({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <div className={`p-5 ${className}`}>{children}</div>;
+  return <div className={`p-4 ${className}`}>{children}</div>;
 }
 
 export function CardFooter({
@@ -57,7 +57,9 @@ export function CardFooter({
   className?: string;
 }) {
   return (
-    <div className={`px-5 py-3.5 bg-slate-50/70 border-t border-slate-100 rounded-b-card ${className}`}>
+    <div
+      className={`px-4 py-3 bg-surface-secondary border-t border-surface-border-light rounded-b-card ${className}`}
+    >
       {children}
     </div>
   );

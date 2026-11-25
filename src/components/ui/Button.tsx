@@ -4,7 +4,7 @@ import React from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   isLoading?: boolean;
 }
 
@@ -15,32 +15,30 @@ export function Button({
   isLoading = false,
   className = '',
   disabled,
+  type = 'button',
   ...props
 }: ButtonProps) {
   const baseClasses =
-    'inline-flex items-center justify-center font-medium rounded-button transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2';
+    'inline-flex items-center justify-center font-medium rounded transition-colors duration-150 disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 whitespace-nowrap';
 
   const sizeClasses = {
+    xs: 'text-[11px] px-2.5 py-1 h-7 gap-1',
     sm: 'text-xs px-3 py-1.5 h-8 gap-1.5',
-    md: 'text-sm px-4 py-2 h-10 gap-2',
-    lg: 'text-base px-6 py-3 h-12 gap-2.5 font-semibold',
+    md: 'text-[13px] px-3.5 py-2 h-9 gap-2',
+    lg: 'text-sm px-5 py-2.5 h-10 gap-2 font-semibold',
   }[size];
 
   const variantClasses = {
-    primary:
-      'bg-brand-600 hover:bg-brand-700 text-white shadow-subtle hover:shadow-card',
-    secondary:
-      'bg-slate-100 hover:bg-slate-200 text-slate-900',
-    outline:
-      'border border-slate-300 hover:border-slate-400 bg-white text-slate-800 shadow-subtle',
-    ghost:
-      'text-slate-600 hover:text-slate-900 hover:bg-slate-100',
-    danger:
-      'bg-red-600 hover:bg-red-700 text-white shadow-subtle',
+    primary: 'bg-primary hover:bg-primary-dk text-white shadow-subtle',
+    secondary: 'bg-surface-secondary hover:bg-surface-border text-ink border border-surface-border',
+    outline: 'border border-surface-border hover:border-ink-muted bg-surface text-ink shadow-subtle',
+    ghost: 'text-ink-secondary hover:text-ink hover:bg-surface-secondary',
+    danger: 'bg-semantic-red hover:opacity-90 text-white shadow-subtle',
   }[variant];
 
   return (
     <button
+      type={type}
       className={`${baseClasses} ${sizeClasses} ${variantClasses} ${className}`}
       disabled={disabled || isLoading}
       {...props}
@@ -48,7 +46,7 @@ export function Button({
       {isLoading ? (
         <>
           <svg
-            className="animate-spin -ml-1 mr-2 h-4 w-4 text-current"
+            className="animate-spin h-3.5 w-3.5 text-current shrink-0"
             fill="none"
             viewBox="0 0 24 24"
           >
@@ -66,7 +64,7 @@ export function Button({
               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
             />
           </svg>
-          <span>กำลังประมวลผล...</span>
+          <span>กำลังดำเนินการ...</span>
         </>
       ) : (
         children

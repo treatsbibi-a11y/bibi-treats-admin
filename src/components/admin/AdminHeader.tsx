@@ -1,146 +1,316 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faBars, faBell } from '@fortawesome/free-solid-svg-icons';
-import { StoreSettingsData } from '@/types';
+import {
+  faBars,
+  faBell,
+  faMagnifyingGlass,
+  faMoon,
+  faSun,
+  faGear,
+  faArrowUpRightFromSquare,
+  faRightFromBracket,
+  faChevronRight,
+  faBagShopping,
+} from '@fortawesome/free-solid-svg-icons';
+import { getBreadcrumbs } from '@/lib/admin-nav';
+import { useTheme } from '@/components/theme/ThemeProvider';
+import { DropdownMenu } from '@/components/ui/DropdownMenu';
+import { OrderDetail, StoreSettingsData } from '@/types';
 
 interface AdminHeaderProps {
-  onOpenSidebar: () => void;
-  pendingOrdersCount?: number;
+  onOpenMobileSidebar: () => void;
+  onToggleDesktopSidebar: () => void;
+  onOpenCommandPalette: () => void;
+  pendingOrders?: OrderDetail[];
+  storeSettings: StoreSettingsData | null;
+  togglingStore?: boolean;
+  onToggleStoreStatus: () => void;
 }
 
 export default function AdminHeader({
-  onOpenSidebar,
-  pendingOrdersCount = 0,
+  onOpenMobileSidebar,
+  onToggleDesktopSidebar,
+  onOpenCommandPalette,
+  pendingOrders = [],
+  storeSettings,
+  togglingStore = false,
+  onToggleStoreStatus,
 }: AdminHeaderProps) {
-  const [storeSettings, setStoreSettings] = useState<StoreSettingsData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+  const { resolvedTheme, toggleTheme } = useTheme();
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
-  useEffect(() => {
-    async function fetchSettings() {
-      try {
-        const res = await fetch('/api/admin/settings');
-        if (res.ok) {
-          const data = await res.json();
-          setStoreSettings(data);
-        }
-      } catch (err) {
-        console.error('Failed to load store settings in header', err);
-      }
-    }
-    fetchSettings();
-  }, []);
+  const breadcrumbs = getBreadcrumbs(pathname);
+  const pendingCount = pendingOrders.length;
 
-  const toggleStoreStatus = async () => {
-    if (!storeSettings) return;
-    const newStatus = !storeSettings.isStoreOpen;
-    setLoading(true);
+  const handleLogout = async () => {
+    setProfileOpen(false);
     try {
-      const res = await fetch('/api/admin/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isStoreOpen: newStatus }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setStoreSettings(updated);
-      }
+      await fetch('/api/admin/logout', { method: 'POST' });
     } catch (err) {
-      console.error('Error toggling store status', err);
+      console.error('Logout error:', err);
     } finally {
-      setLoading(false);
+      router.push('/login');
+      router.refresh();
     }
   };
 
   return (
-    <header className="sticky top-0 z-30 h-16 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3 sm:px-6 lg:px-8 flex items-center justify-between">
-      {/* Left: Mobile Sidebar Toggle & Breadcrumb */}
-      <div className="flex items-center gap-2 sm:gap-3">
+    <header className="sticky top-0 z-30 h-14 bg-surface border-b border-surface-border px-3 sm:px-5 flex items-center justify-between gap-2 no-print">
+      {/* Left: Sidebar Toggle & Auto-linked Breadcrumbs */}
+      <div className="flex items-center gap-2 min-w-0">
         <button
           type="button"
-          onClick={onOpenSidebar}
-          className="lg:hidden p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors active:scale-95"
+          onClick={onOpenMobileSidebar}
+          className="lg:hidden p-2 min-h-[38px] min-w-[38px] flex items-center justify-center rounded text-ink-secondary hover:text-ink hover:bg-surface-secondary transition-colors"
           aria-label="เปิดเมนูนำทาง"
         >
-          <FontAwesomeIcon icon={faBars} className="w-5 h-5 text-slate-700" />
+          <FontAwesomeIcon icon={faBars} className="w-4 h-4" />
         </button>
 
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 hidden sm:inline">
-            Console
-          </span>
-          <span className="text-slate-300 hidden sm:inline">/</span>
-          <span className="text-xs sm:text-sm font-bold text-slate-800">
-            ระบบจัดการร้านค้า
-          </span>
-        </div>
+        <button
+          type="button"
+          onClick={onToggleDesktopSidebar}
+          className="hidden lg:inline-flex p-2 min-h-[36px] min-w-[36px] items-center justify-center rounded text-ink-secondary hover:text-ink hover:bg-surface-secondary transition-colors"
+          aria-label="ย่อหรือขยายแถบเมนูด้านข้าง"
+          title="ย่อ/ขยายเมนู"
+        >
+          <FontAwesomeIcon icon={faBars} className="w-4 h-4" />
+        </button>
+
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 min-w-0 text-[13px]">
+          {breadcrumbs.map((seg, idx) => {
+            const isLast = idx === breadcrumbs.length - 1;
+            return (
+              <React.Fragment key={`${seg.label}-${idx}`}>
+                {idx > 0 && (
+                  <FontAwesomeIcon
+                    icon={faChevronRight}
+                    className="w-2.5 h-2.5 text-ink-muted shrink-0 hidden sm:inline"
+                  />
+                )}
+                {isLast || !seg.href ? (
+                  <span className="font-semibold text-ink truncate">{seg.label}</span>
+                ) : (
+                  <Link
+                    href={seg.href}
+                    className="text-ink-muted hover:text-ink transition-colors truncate hidden sm:inline"
+                  >
+                    {seg.label}
+                  </Link>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </nav>
       </div>
 
-      {/* Right Actions: Store Toggle & Notifications */}
-      <div className="flex items-center gap-2 sm:gap-4">
+      {/* Right: Command Palette, Store Toggle, Theme Toggle, Bell Menu, Profile Menu */}
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        {/* Command Palette Trigger */}
+        <button
+          type="button"
+          onClick={onOpenCommandPalette}
+          className="inline-flex items-center gap-2 px-2.5 py-1.5 h-8 rounded border border-surface-border bg-surface-secondary hover:border-ink-muted text-ink-muted hover:text-ink text-xs transition-colors"
+          title="ค้นหาด่วน (⌘K / Ctrl+K)"
+          aria-label="เปิด Command Palette"
+        >
+          <FontAwesomeIcon icon={faMagnifyingGlass} className="w-3.5 h-3.5" />
+          <span className="hidden md:inline text-xs">ค้นหาด่วน...</span>
+          <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-surface border border-surface-border rounded-sm text-ink-muted leading-none">
+            ⌘K
+          </kbd>
+        </button>
+
         {/* Store Active Toggle */}
         <button
           type="button"
-          onClick={toggleStoreStatus}
-          disabled={loading || !storeSettings}
-          className={`inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 min-h-[38px] sm:min-h-[40px] rounded-full text-[11px] sm:text-xs font-semibold border transition-all active:scale-95 ${
+          onClick={onToggleStoreStatus}
+          disabled={togglingStore || !storeSettings}
+          className={`inline-flex items-center gap-1.5 px-2.5 h-8 rounded text-xs font-medium border transition-colors disabled:opacity-50 ${
             storeSettings?.isStoreOpen
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100'
-              : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
+              ? 'bg-semantic-green-lt border-semantic-green/25 text-semantic-green hover:opacity-90'
+              : 'bg-surface-secondary border-surface-border text-ink-secondary hover:text-ink'
           }`}
           title="คลิกเพื่อสลับสถานะเปิด/ปิดรับออเดอร์"
         >
           <span
-            className={`w-2 h-2 rounded-full flex-shrink-0 ${
-              storeSettings?.isStoreOpen ? 'bg-emerald-600 animate-pulse' : 'bg-slate-400'
+            className={`w-2 h-2 rounded-full shrink-0 ${
+              storeSettings?.isStoreOpen ? 'bg-semantic-green' : 'bg-ink-muted'
             }`}
           />
           <span className="hidden sm:inline">
             {storeSettings?.isStoreOpen ? 'เปิดรับออเดอร์' : 'ปิดรับชั่วคราว'}
           </span>
           <span className="sm:hidden">
-            {storeSettings?.isStoreOpen ? 'เปิดร้าน' : 'ปิดร้าน'}
+            {storeSettings?.isStoreOpen ? 'เปิด' : 'ปิด'}
           </span>
         </button>
 
-        {/* Notifications Bell */}
-        <Link
-          href="/orders"
-          className="relative p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
-          title="ออเดอร์ใหม่รอดำเนินการ"
-          aria-label="ออเดอร์ใหม่รอดำเนินการ"
+        {/* Light / Dark Mode Toggle */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="p-2 h-8 w-8 inline-flex items-center justify-center rounded border border-transparent hover:border-surface-border hover:bg-surface-secondary text-ink-secondary hover:text-ink transition-colors"
+          title={resolvedTheme === 'dark' ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}
+          aria-label={resolvedTheme === 'dark' ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}
         >
-          <FontAwesomeIcon icon={faBell} className="w-4 h-4" />
-          {pendingOrdersCount > 0 && (
-            <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-white" />
-          )}
-        </Link>
+          <FontAwesomeIcon
+            icon={resolvedTheme === 'dark' ? faSun : faMoon}
+            className="w-3.5 h-3.5"
+          />
+        </button>
 
-        {/* Store Profile Avatar / Logo */}
-        <Link
-          href="/settings"
-          className="flex items-center gap-2 pl-1 sm:pl-2 border-l border-slate-200 group"
-          title="จัดการการตั้งค่าและโลโก้ร้าน"
+        {/* Notifications Bell Dropdown */}
+        <DropdownMenu
+          isOpen={notifOpen}
+          onOpenChange={setNotifOpen}
+          widthClass="w-72 sm:w-80"
+          trigger={
+            <button
+              type="button"
+              onClick={() => setNotifOpen((o) => !o)}
+              className="relative p-2 h-8 w-8 inline-flex items-center justify-center rounded border border-transparent hover:border-surface-border hover:bg-surface-secondary text-ink-secondary hover:text-ink transition-colors"
+              aria-label="แจ้งเตือนออเดอร์รอดำเนินการ"
+              aria-expanded={notifOpen}
+            >
+              <FontAwesomeIcon icon={faBell} className="w-3.5 h-3.5" />
+              {pendingCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-semantic-red text-white text-[10px] font-mono-num font-semibold flex items-center justify-center">
+                  {pendingCount > 99 ? '99+' : pendingCount}
+                </span>
+              )}
+            </button>
+          }
         >
-          {storeSettings?.logoUrl ? (
-            <div className="w-8 h-8 rounded-full overflow-hidden bg-white border border-slate-200/80 shadow-xs flex items-center justify-center shrink-0">
-              <img
-                src={storeSettings.logoUrl}
-                alt="Logo"
-                className="w-full h-full object-cover scale-110"
+          <div className="px-3 py-2 border-b border-surface-border-light flex items-center justify-between">
+            <span className="text-xs font-semibold text-ink">ออเดอร์รอยืนยัน</span>
+            <span className="text-[11px] font-mono-num text-ink-muted">
+              {pendingCount} รายการ
+            </span>
+          </div>
+
+          <div className="max-h-64 overflow-y-auto divide-y divide-surface-border-light">
+            {pendingOrders.length > 0 ? (
+              pendingOrders.slice(0, 5).map((order) => (
+                <Link
+                  key={order.id}
+                  href={`/orders?status=PENDING&search=${encodeURIComponent(order.orderNumber)}`}
+                  onClick={() => setNotifOpen(false)}
+                  className="px-3 py-2.5 flex items-center justify-between gap-2 hover:bg-surface-secondary transition-colors"
+                >
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-ink font-mono-num truncate">
+                      #{order.orderNumber}
+                    </div>
+                    <div className="text-[11px] text-ink-muted truncate">
+                      {order.customer?.name || 'ลูกค้าทั่วไป'}
+                    </div>
+                  </div>
+                  <span className="text-xs font-semibold font-mono-num text-primary-text shrink-0">
+                    ฿{(order.total ?? 0).toLocaleString()}
+                  </span>
+                </Link>
+              ))
+            ) : (
+              <div className="py-6 text-center text-xs text-ink-muted">
+                ไม่มีออเดอร์รอยืนยันในขณะนี้
+              </div>
+            )}
+          </div>
+
+          <div className="p-1.5 border-t border-surface-border-light bg-surface-secondary">
+            <Link
+              href="/orders?status=PENDING"
+              onClick={() => setNotifOpen(false)}
+              className="w-full py-1.5 px-2.5 rounded text-xs font-medium text-primary-text hover:bg-primary-lt flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <FontAwesomeIcon icon={faBagShopping} className="w-3 h-3" />
+              <span>ดูรายการคำสั่งซื้อทั้งหมด</span>
+            </Link>
+          </div>
+        </DropdownMenu>
+
+        {/* Profile Dropdown */}
+        <DropdownMenu
+          isOpen={profileOpen}
+          onOpenChange={setProfileOpen}
+          widthClass="w-56"
+          trigger={
+            <button
+              type="button"
+              onClick={() => setProfileOpen((o) => !o)}
+              className="flex items-center gap-2 pl-2 border-l border-surface-border py-1 pr-1 rounded-r hover:bg-surface-secondary transition-colors"
+              aria-label="เมนูร้านค้าและบัญชีผู้ดูแล"
+              aria-expanded={profileOpen}
+            >
+              {storeSettings?.logoUrl ? (
+                <img
+                  src={storeSettings.logoUrl}
+                  alt={storeSettings.shopName}
+                  className="w-7 h-7 rounded object-cover bg-white border border-surface-border shrink-0"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded bg-sidebar-bg text-white font-mono text-[11px] flex items-center justify-center font-semibold shrink-0">
+                  BT
+                </div>
+              )}
+              <span className="text-xs font-medium text-ink hidden md:inline max-w-[140px] truncate">
+                {storeSettings?.shopName || 'ผู้ดูแลระบบ'}
+              </span>
+            </button>
+          }
+        >
+          <div className="px-3 py-2 border-b border-surface-border-light">
+            <div className="text-xs font-semibold text-ink truncate">
+              {storeSettings?.shopName || "Bibi's Treats"}
+            </div>
+            <div className="text-[11px] text-ink-muted truncate">
+              ผู้ดูแลระบบร้านค้า
+            </div>
+          </div>
+
+          <div className="py-1">
+            <Link
+              href="/settings"
+              onClick={() => setProfileOpen(false)}
+              className="px-3 py-2 text-xs text-ink-secondary hover:text-ink hover:bg-surface-secondary flex items-center gap-2 transition-colors"
+            >
+              <FontAwesomeIcon icon={faGear} className="w-3.5 h-3.5 text-ink-muted" />
+              <span>ตั้งค่าร้านค้า</span>
+            </Link>
+            <Link
+              href={process.env.NEXT_PUBLIC_STOREFRONT_URL || 'http://localhost:3002'}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setProfileOpen(false)}
+              className="px-3 py-2 text-xs text-ink-secondary hover:text-ink hover:bg-surface-secondary flex items-center gap-2 transition-colors"
+            >
+              <FontAwesomeIcon
+                icon={faArrowUpRightFromSquare}
+                className="w-3.5 h-3.5 text-ink-muted"
               />
-            </div>
-          ) : (
-            <div className="w-8 h-8 rounded-full bg-slate-900 text-white font-mono text-xs flex items-center justify-center font-bold shadow-xs">
-              AD
-            </div>
-          )}
-          <span className="text-xs font-semibold text-slate-800 hidden md:inline group-hover:text-amber-800 transition-colors">
-            {storeSettings?.shopName || 'ผู้ดูแลระบบ'}
-          </span>
-        </Link>
+              <span>ดูหน้าร้านออนไลน์</span>
+            </Link>
+          </div>
+
+          <div className="py-1 border-t border-surface-border-light">
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full px-3 py-2 text-left text-xs text-semantic-red hover:bg-semantic-red-lt flex items-center gap-2 transition-colors"
+            >
+              <FontAwesomeIcon icon={faRightFromBracket} className="w-3.5 h-3.5" />
+              <span>ออกจากระบบ</span>
+            </button>
+          </div>
+        </DropdownMenu>
       </div>
     </header>
   );

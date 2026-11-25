@@ -3,6 +3,8 @@ import { config } from '@fortawesome/fontawesome-svg-core';
 import '@fortawesome/fontawesome-svg-core/styles.css';
 import './globals.css';
 import AdminShell from '@/components/admin/AdminShell';
+import { ThemeProvider } from '@/components/theme/ThemeProvider';
+import { ToastProvider } from '@/components/ui/Toast';
 
 config.autoAddCss = false;
 
@@ -14,15 +16,31 @@ export const metadata: Metadata = {
   },
 };
 
+const THEME_INIT_SCRIPT = `(function(){try{var s=localStorage.getItem('bibi-admin-theme');var m=document.querySelector('meta[name="color-scheme"]');var d=s==='dark'||(s!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);var t=d?'dark':'light';document.documentElement.setAttribute('data-theme',t);if(m){m.setAttribute('content',s==='light'||s==='dark'?s:'light dark');}}catch(e){}})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="th" className="antialiased">
-      <body className="font-sans min-h-screen bg-[#FAFCFE] text-[#0F172A] selection:bg-[#E0F2FE] selection:text-[#0284C7] overflow-x-hidden">
-        <AdminShell>{children}</AdminShell>
+    <html lang="th" suppressHydrationWarning className="antialiased">
+      <head>
+        <meta name="color-scheme" content="light dark" />
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Rubik:wght@300;400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body className="min-h-screen bg-surface-body text-ink selection:bg-primary-md selection:text-ink overflow-x-hidden">
+        <ThemeProvider>
+          <ToastProvider>
+            <AdminShell>{children}</AdminShell>
+          </ToastProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faPlus,
@@ -8,7 +9,6 @@ import {
   faPenToSquare,
   faTrashCan,
   faImage,
-  faXmark,
   faStar,
   faArrowUp,
   faArrowDown,
@@ -17,6 +17,12 @@ import {
   faRotate,
   faCakeCandles,
 } from '@fortawesome/free-solid-svg-icons';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
+import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
+import { showToast } from '@/components/ui/Toast';
 import { ProductWithImages } from '@/types';
 
 const CATEGORIES = [
@@ -30,24 +36,25 @@ const CATEGORIES = [
   'Drinks',
 ];
 
-export default function AdminProductsPage() {
+const DEFAULT_CATEGORY = CATEGORIES[1];
+
+function ProductsContent() {
+  const searchParams = useSearchParams();
   const [products, setProducts] = useState<ProductWithImages[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams.get('search') || '');
   const [selectedCategory, setSelectedCategory] = useState('ทั้งหมด');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
 
-  // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductWithImages | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<ProductWithImages | null>(null);
   const [imageModalProduct, setImageModalProduct] = useState<ProductWithImages | null>(null);
 
-  // Form state for Add/Edit
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    category: 'บราวนี่ฟัดจ์',
+    category: DEFAULT_CATEGORY,
     price: 0,
     stock: 10,
     initialStock: 10,
@@ -57,7 +64,6 @@ export default function AdminProductsPage() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
 
-  // Load products
   const fetchProducts = async () => {
     setLoading(true);
     try {
@@ -68,6 +74,7 @@ export default function AdminProductsPage() {
       }
     } catch (err) {
       console.error('Failed to fetch products', err);
+      showToast({ title: 'โหลดข้อมูลสินค้าไม่สำเร็จ', variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -77,19 +84,42 @@ export default function AdminProductsPage() {
     fetchProducts();
   }, []);
 
-  // Filter products
-  const filteredProducts = products.filter((p) => {
-    const matchSearch =
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.description.toLowerCase().includes(search.toLowerCase());
-    const matchCategory =
-      selectedCategory === 'ทั้งหมด' || p.category === selectedCategory;
-    const matchStatus =
-      statusFilter === 'ALL' || p.status === statusFilter;
-    return matchSearch && matchCategory && matchStatus;
-  });
+  const openAddModal = () => {
+    setFormData({
+      name: '',
+      description: '',
+      category: DEFAULT_CATEGORY,
+      price: 65,
+      stock: 20,
+      initialStock: 20,
+      imageUrl: '',
+    });
+    setImageUploadError(null);
+    setIsAddModalOpen(true);
+  };
 
-  // Toggle active/inactive
+  useEffect(() => {
+    const q = searchParams.get('search');
+    if (q !== null) setSearch(q);
+    if (searchParams.get('new') === '1') {
+      openAddModal();
+    }
+  }, [searchParams]);
+
+  const filteredProducts = useMemo(() => {
+    const q = search.toLowerCase();
+    return products.filter((p) => {
+      const matchSearch =
+        !q ||
+        p.name.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q);
+      const matchCategory =
+        selectedCategory === 'ทั้งหมด' || p.category === selectedCategory;
+      const matchStatus = statusFilter === 'ALL' || p.status === statusFilter;
+      return matchSearch && matchCategory && matchStatus;
+    });
+  }, [products, search, selectedCategory, statusFilter]);
+
   const handleToggleStatus = async (product: ProductWithImages) => {
     const newStatus = product.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     try {
@@ -102,28 +132,19 @@ export default function AdminProductsPage() {
         setProducts((prev) =>
           prev.map((p) => (p.id === product.id ? { ...p, status: newStatus } : p))
         );
+        showToast({
+          title: newStatus === 'ACTIVE' ? 'เปิดขายสินค้าแล้ว' : 'ปิดการขายชั่วคราวแล้ว',
+          description: product.name,
+          variant: 'success',
+        });
+      } else {
+        showToast({ title: 'เปลี่ยนสถานะสินค้าไม่สำเร็จ', variant: 'error' });
       }
-    } catch (err) {
-      console.error('Error toggling product status', err);
+    } catch {
+      showToast({ title: 'เกิดข้อผิดพลาดในการเชื่อมต่อ', variant: 'error' });
     }
   };
 
-  // Open Add Modal
-  const openAddModal = () => {
-    setFormData({
-      name: '',
-      description: '',
-      category: 'Brownies',
-      price: 65,
-      stock: 20,
-      initialStock: 20,
-      imageUrl: '',
-    });
-    setImageUploadError(null);
-    setIsAddModalOpen(true);
-  };
-
-  // Open Edit Modal
   const openEditModal = (product: ProductWithImages) => {
     setEditingProduct(product);
     setFormData({
@@ -137,7 +158,6 @@ export default function AdminProductsPage() {
     });
   };
 
-  // Handle file upload
   const handleFileUpload = async (file: File): Promise<string | null> => {
     setUploadingImage(true);
     setImageUploadError(null);
@@ -156,13 +176,13 @@ export default function AdminProductsPage() {
       return data.url;
     } catch (err: any) {
       setImageUploadError(err.message);
+      showToast({ title: err.message || 'อัปโหลดรูปภาพไม่สำเร็จ', variant: 'error' });
       return null;
     } finally {
       setUploadingImage(false);
     }
   };
 
-  // Submit Add Product
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -184,19 +204,19 @@ export default function AdminProductsPage() {
       });
       if (res.ok) {
         setIsAddModalOpen(false);
+        showToast({ title: 'เพิ่มเมนูใหม่สำเร็จ', description: formData.name, variant: 'success' });
         fetchProducts();
       } else {
-        const err = await res.json();
-        alert(err.error || 'เกิดข้อผิดพลาดในการสร้างสินค้า');
+        const err = await res.json().catch(() => ({}));
+        showToast({ title: err.error || 'เกิดข้อผิดพลาดในการสร้างสินค้า', variant: 'error' });
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
+      showToast({ title: 'เกิดข้อผิดพลาดในการสร้างสินค้า', variant: 'error' });
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Submit Edit Product
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct) return;
@@ -216,16 +236,18 @@ export default function AdminProductsPage() {
       });
       if (res.ok) {
         setEditingProduct(null);
+        showToast({ title: 'บันทึกการแก้ไขเมนูแล้ว', description: formData.name, variant: 'success' });
         fetchProducts();
+      } else {
+        showToast({ title: 'บันทึกการแก้ไขไม่สำเร็จ', variant: 'error' });
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
+      showToast({ title: 'เกิดข้อผิดพลาดในการบันทึก', variant: 'error' });
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Confirm Delete Product
   const handleDeleteConfirm = async () => {
     if (!deletingProduct) return;
     setSubmitting(true);
@@ -234,17 +256,29 @@ export default function AdminProductsPage() {
         method: 'DELETE',
       });
       if (res.ok) {
+        const deletedName = deletingProduct.name;
         setDeletingProduct(null);
+        showToast({ title: 'ลบเมนูสินค้าแล้ว', description: deletedName, variant: 'success' });
         fetchProducts();
+      } else {
+        showToast({ title: 'ลบสินค้าไม่สำเร็จ', variant: 'error' });
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
+      showToast({ title: 'เกิดข้อผิดพลาดในการลบสินค้า', variant: 'error' });
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Image Modal Operations
+  const refreshSelectedProductImages = async (productId: string) => {
+    const prodRes = await fetch(`/api/products/${productId}`);
+    if (prodRes.ok) {
+      const freshProd = await prodRes.json();
+      setImageModalProduct(freshProd);
+      setProducts((prev) => prev.map((p) => (p.id === freshProd.id ? freshProd : p)));
+    }
+  };
+
   const handleAddImageToProduct = async (url: string) => {
     if (!imageModalProduct || !url) return;
     try {
@@ -258,17 +292,11 @@ export default function AdminProductsPage() {
         }),
       });
       if (res.ok) {
-        const prodRes = await fetch(`/api/products/${imageModalProduct.id}`);
-        if (prodRes.ok) {
-          const freshProd = await prodRes.json();
-          setImageModalProduct(freshProd);
-          setProducts((prev) =>
-            prev.map((p) => (p.id === freshProd.id ? freshProd : p))
-          );
-        }
+        await refreshSelectedProductImages(imageModalProduct.id);
+        showToast({ title: 'อัปโหลดรูปภาพเพิ่มแล้ว', variant: 'success' });
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
+      showToast({ title: 'เพิ่มรูปภาพไม่สำเร็จ', variant: 'error' });
     }
   };
 
@@ -278,23 +306,14 @@ export default function AdminProductsPage() {
       const res = await fetch(`/api/products/${imageModalProduct.id}/images`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageId,
-          isPrimary: true,
-        }),
+        body: JSON.stringify({ imageId, isPrimary: true }),
       });
       if (res.ok) {
-        const prodRes = await fetch(`/api/products/${imageModalProduct.id}`);
-        if (prodRes.ok) {
-          const freshProd = await prodRes.json();
-          setImageModalProduct(freshProd);
-          setProducts((prev) =>
-            prev.map((p) => (p.id === freshProd.id ? freshProd : p))
-          );
-        }
+        await refreshSelectedProductImages(imageModalProduct.id);
+        showToast({ title: 'ตั้งเป็นรูปภาพหลักแล้ว', variant: 'success' });
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
+      showToast({ title: 'ตั้งรูปหลักไม่สำเร็จ', variant: 'error' });
     }
   };
 
@@ -306,17 +325,11 @@ export default function AdminProductsPage() {
         { method: 'DELETE' }
       );
       if (res.ok) {
-        const prodRes = await fetch(`/api/products/${imageModalProduct.id}`);
-        if (prodRes.ok) {
-          const freshProd = await prodRes.json();
-          setImageModalProduct(freshProd);
-          setProducts((prev) =>
-            prev.map((p) => (p.id === freshProd.id ? freshProd : p))
-          );
-        }
+        await refreshSelectedProductImages(imageModalProduct.id);
+        showToast({ title: 'ลบรูปภาพแล้ว', variant: 'success' });
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
+      showToast({ title: 'ลบรูปภาพไม่สำเร็จ', variant: 'error' });
     }
   };
 
@@ -326,7 +339,6 @@ export default function AdminProductsPage() {
     const targetIndex = direction === 'UP' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= images.length) return;
 
-    // Swap
     const temp = images[index];
     images[index] = images[targetIndex];
     images[targetIndex] = temp;
@@ -344,149 +356,260 @@ export default function AdminProductsPage() {
         }),
       });
       if (res.ok) {
-        const prodRes = await fetch(`/api/products/${imageModalProduct.id}`);
-        if (prodRes.ok) {
-          const freshProd = await prodRes.json();
-          setImageModalProduct(freshProd);
-          setProducts((prev) =>
-            prev.map((p) => (p.id === freshProd.id ? freshProd : p))
-          );
-        }
+        await refreshSelectedProductImages(imageModalProduct.id);
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
+      showToast({ title: 'จัดลำดับรูปไม่สำเร็จ', variant: 'error' });
     }
   };
 
+  const productColumns: DataTableColumn<ProductWithImages>[] = [
+    {
+      key: 'image',
+      header: 'รูปภาพ',
+      width: '72px',
+      render: (product) => {
+        const primaryImage =
+          product.images?.find((img) => img.isPrimary) || product.images?.[0];
+        return (
+          <button
+            type="button"
+            onClick={() => setImageModalProduct(product)}
+            className="w-11 h-11 rounded overflow-hidden bg-surface-secondary border border-surface-border relative group flex items-center justify-center"
+            title="คลิกเพื่อจัดการรูปภาพ"
+          >
+            {primaryImage ? (
+              <img
+                src={primaryImage.imageUrl}
+                alt={product.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <FontAwesomeIcon icon={faCakeCandles} className="w-4 h-4 text-ink-disabled" />
+            )}
+            {product.images && product.images.length > 1 && (
+              <span className="absolute bottom-0.5 right-0.5 bg-sidebar-bg/85 text-white text-[9px] font-mono-num px-1 rounded-sm">
+                +{product.images.length}
+              </span>
+            )}
+          </button>
+        );
+      },
+    },
+    {
+      key: 'name',
+      header: 'ชื่อสินค้า & หมวดหมู่',
+      sortable: true,
+      sortValue: (p) => p.name,
+      render: (product) => (
+        <div className="min-w-[190px]">
+          <div className="font-semibold text-ink text-[13px]">{product.name}</div>
+          <div className="flex items-center gap-2 mt-1">
+            <Badge variant="neutral" size="sm">
+              {product.category}
+            </Badge>
+            <span className="text-ink-muted text-xs line-clamp-1 max-w-xs">
+              {product.description}
+            </span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'price',
+      header: 'ราคา',
+      align: 'right',
+      sortable: true,
+      sortValue: (p) => p.price,
+      render: (product) => (
+        <span className="font-semibold text-ink font-mono-num">฿{product.price}</span>
+      ),
+    },
+    {
+      key: 'stock',
+      header: 'คงเหลือ / ขายแล้ว',
+      sortable: true,
+      sortValue: (p) => p.stock,
+      render: (product) => (
+        <div className="text-xs">
+          <span
+            className={`font-semibold font-mono-num ${
+              product.stock === 0
+                ? 'text-semantic-red'
+                : product.stock <= 5
+                ? 'text-semantic-yellow'
+                : 'text-ink'
+            }`}
+          >
+            เหลือ {product.stock} ชิ้น
+          </span>
+          <span className="text-ink-muted block text-[11px] font-mono-num mt-0.5">
+            ขายแล้ว {product.sold || 0} ชิ้น
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'สถานะ',
+      sortable: true,
+      sortValue: (p) => p.status,
+      render: (product) => {
+        const isActive = product.status === 'ACTIVE';
+        return (
+          <button
+            type="button"
+            onClick={() => handleToggleStatus(product)}
+            className="transition-opacity hover:opacity-85"
+            title="คลิกเพื่อสลับสถานะ"
+          >
+            <Badge variant={isActive ? 'success' : 'neutral'} dot>
+              {isActive ? 'พร้อมขาย' : 'ปิดการขาย'}
+            </Badge>
+          </button>
+        );
+      },
+    },
+    {
+      key: 'actions',
+      header: 'การจัดการ',
+      align: 'right',
+      render: (product) => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            type="button"
+            onClick={() => setImageModalProduct(product)}
+            className="p-1.5 h-7 w-7 inline-flex items-center justify-center rounded text-ink-muted hover:text-ink hover:bg-surface-secondary transition-colors"
+            title="จัดการรูปภาพ"
+          >
+            <FontAwesomeIcon icon={faImage} className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => openEditModal(product)}
+            className="p-1.5 h-7 w-7 inline-flex items-center justify-center rounded text-ink-muted hover:text-primary-text hover:bg-primary-lt transition-colors"
+            title="แก้ไขข้อมูลสินค้า"
+          >
+            <FontAwesomeIcon icon={faPenToSquare} className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeletingProduct(product)}
+            className="p-1.5 h-7 w-7 inline-flex items-center justify-center rounded text-ink-muted hover:text-semantic-red hover:bg-semantic-red-lt transition-colors"
+            title="ลบสินค้า"
+          >
+            <FontAwesomeIcon icon={faTrashCan} className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  const inputClass =
+    'w-full px-3 py-2 rounded border border-surface-border focus:border-primary focus:ring-1 focus:ring-primary outline-none text-[13px] bg-surface text-ink';
+
   return (
-    <div className="space-y-6 pb-12">
-      {/* Page Title & Add Button */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+    <div className="space-y-5 pb-8">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+          <h1 className="text-lg sm:text-xl font-semibold text-ink tracking-tight">
             จัดการเมนูสินค้า
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+          <p className="text-xs sm:text-[13px] text-ink-secondary mt-0.5">
             เพิ่ม แก้ไข ปรับราคา อัปเดตรูปภาพ และสถานะสินค้าหน้าร้าน
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={fetchProducts}
-            className="p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition-colors"
-            title="รีเฟรชข้อมูล"
-            aria-label="รีเฟรชข้อมูล"
-          >
-            <FontAwesomeIcon icon={faRotate} className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-          <button
-            type="button"
-            onClick={openAddModal}
-            className="flex-1 sm:flex-initial inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs sm:text-sm shadow-xs transition-colors"
-          >
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="outline" size="sm" onClick={fetchProducts} disabled={loading}>
+            <FontAwesomeIcon
+              icon={faRotate}
+              className={`w-3.5 h-3.5 text-ink-muted ${loading ? 'animate-spin' : ''}`}
+            />
+            <span className="hidden sm:inline">รีเฟรช</span>
+          </Button>
+          <Button variant="primary" size="sm" onClick={openAddModal}>
             <FontAwesomeIcon icon={faPlus} className="w-3.5 h-3.5" />
             <span>เพิ่มเมนูใหม่</span>
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-3.5">
+      {/* Filter & Search Bar */}
+      <Card className="p-3.5 space-y-3">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          {/* Search Input */}
           <div className="relative flex-1">
-            <FontAwesomeIcon icon={faMagnifyingGlass} className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <FontAwesomeIcon
+              icon={faMagnifyingGlass}
+              className="w-3.5 h-3.5 text-ink-muted absolute left-3 top-1/2 -translate-y-1/2"
+            />
             <input
               type="text"
               placeholder="ค้นหาชื่อขนม, รายละเอียด..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 focus:border-slate-400 focus:ring-1 focus:ring-slate-400 outline-none text-xs sm:text-sm bg-slate-50/50"
+              className="w-full pl-9 pr-3.5 py-2 rounded border border-surface-border focus:border-primary focus:ring-1 focus:ring-primary outline-none text-xs sm:text-[13px] bg-surface-secondary text-ink placeholder:text-ink-muted"
             />
           </div>
 
-          {/* Status Filter */}
-          <div className="flex items-center space-x-2">
-            <div className="inline-flex p-1 bg-slate-100 rounded-xl text-xs font-medium w-full sm:w-auto justify-between border border-slate-200/60">
+          <div className="inline-flex p-0.5 bg-surface-secondary rounded border border-surface-border text-xs w-full sm:w-auto">
+            {(
+              [
+                { key: 'ALL', label: 'ทั้งหมด' },
+                { key: 'ACTIVE', label: 'พร้อมขาย' },
+                { key: 'INACTIVE', label: 'ปิดการขาย' },
+              ] as const
+            ).map((s) => (
               <button
+                key={s.key}
                 type="button"
-                onClick={() => setStatusFilter('ALL')}
-                className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg transition-all ${
-                  statusFilter === 'ALL'
-                    ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
+                onClick={() => setStatusFilter(s.key)}
+                className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-sm transition-colors ${
+                  statusFilter === s.key
+                    ? 'bg-surface text-ink font-semibold shadow-subtle'
+                    : 'text-ink-muted hover:text-ink'
                 }`}
               >
-                ทั้งหมด
+                {s.label}
               </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter('ACTIVE')}
-                className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg transition-all ${
-                  statusFilter === 'ACTIVE'
-                    ? 'bg-white text-emerald-800 shadow-xs font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                พร้อมขาย
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter('INACTIVE')}
-                className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg transition-all ${
-                  statusFilter === 'INACTIVE'
-                    ? 'bg-white text-slate-700 shadow-xs font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                ปิดการขาย
-              </button>
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* Categories Chips */}
-        <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 pt-1 custom-scrollbar touch-scroll">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar touch-scroll">
           {CATEGORIES.map((cat) => (
             <button
               key={cat}
               type="button"
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+              className={`px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors border ${
                 selectedCategory === cat
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/70'
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-surface-secondary text-ink-secondary border-surface-border hover:text-ink'
               }`}
             >
               {cat}
             </button>
           ))}
         </div>
-      </div>
+      </Card>
 
-      {/* ==================================================== */}
-      {/* MOBILE & TABLET PRODUCTS CARDS (< 1024px)           */}
-      {/* ==================================================== */}
-      <div className="lg:hidden space-y-3">
+      {/* Mobile Cards (< lg) */}
+      <div className="lg:hidden space-y-2.5">
         {filteredProducts.length > 0 ? (
           filteredProducts.map((product) => {
             const primaryImage =
-              product.images?.find((img) => img.isPrimary) ||
-              product.images?.[0];
+              product.images?.find((img) => img.isPrimary) || product.images?.[0];
             const isActive = product.status === 'ACTIVE';
 
             return (
-              <div
-                key={product.id}
-                className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs space-y-3"
-              >
-                {/* Top Row: Image + Main Info */}
-                <div className="flex items-start gap-3.5">
-                  <div
+              <Card key={product.id} className="p-3.5 space-y-3">
+                <div className="flex items-start gap-3">
+                  <button
+                    type="button"
                     onClick={() => setImageModalProduct(product)}
-                    className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-xl overflow-hidden bg-slate-50 border border-slate-200/70 relative cursor-pointer active:scale-95 transition-transform"
+                    className="w-16 h-16 shrink-0 rounded overflow-hidden bg-surface-secondary border border-surface-border relative"
                     title="แตะเพื่อจัดการรูปภาพ"
                   >
                     {primaryImage ? (
@@ -496,692 +619,493 @@ export default function AdminProductsPage() {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-300">
+                      <div className="w-full h-full flex items-center justify-center text-ink-disabled">
                         <FontAwesomeIcon icon={faCakeCandles} className="w-5 h-5" />
                       </div>
                     )}
                     {product.images && product.images.length > 1 && (
-                      <span className="absolute bottom-1 right-1 bg-slate-900/80 text-white text-[9px] font-mono px-1 py-0.2 rounded">
+                      <span className="absolute bottom-0.5 right-0.5 bg-sidebar-bg/85 text-white text-[9px] font-mono-num px-1 rounded-sm">
                         +{product.images.length}
                       </span>
                     )}
-                  </div>
+                  </button>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-semibold text-slate-900 text-sm leading-snug line-clamp-1">
-                        {product.name}
-                      </h3>
-                      <span className="font-bold text-slate-900 font-mono text-base shrink-0">
+                      <h3 className="font-semibold text-ink text-sm truncate">{product.name}</h3>
+                      <span className="font-semibold text-ink font-mono-num text-sm shrink-0">
                         ฿{product.price}
                       </span>
                     </div>
 
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      <span className="inline-block whitespace-nowrap px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200/70">
+                    <div className="mt-1">
+                      <Badge variant="neutral" size="sm">
                         {product.category}
-                      </span>
+                      </Badge>
                     </div>
 
-                    <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-500">
+                    <div className="mt-1.5 flex items-center gap-2 text-xs text-ink-muted font-mono-num">
                       <span
-                        className={`font-medium ${
+                        className={
                           product.stock === 0
-                            ? 'text-rose-600'
+                            ? 'text-semantic-red font-semibold'
                             : product.stock <= 5
-                            ? 'text-amber-600'
-                            : 'text-slate-600'
-                        }`}
+                            ? 'text-semantic-yellow font-semibold'
+                            : 'text-ink-secondary font-semibold'
+                        }
                       >
                         เหลือ {product.stock} ชิ้น
                       </span>
-                      <span className="text-slate-300">·</span>
-                      <span className="text-slate-400 text-[11px]">
-                        ขายแล้ว {product.sold || 0} ชิ้น
-                      </span>
+                      <span>·</span>
+                      <span>ขายแล้ว {product.sold || 0} ชิ้น</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Bottom Row: Status Toggle & Actions */}
-                <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleToggleStatus(product)}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
-                      isActive
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200/80'
-                        : 'bg-slate-100 text-slate-600 border-slate-200/80'
-                    }`}
-                  >
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full ${
-                        isActive ? 'bg-emerald-500' : 'bg-slate-400'
-                      }`}
-                    />
-                    <span>{isActive ? 'พร้อมขาย' : 'ปิดการขาย'}</span>
+                <div className="pt-2.5 border-t border-surface-border-light flex items-center justify-between gap-2">
+                  <button type="button" onClick={() => handleToggleStatus(product)}>
+                    <Badge variant={isActive ? 'success' : 'neutral'} dot>
+                      {isActive ? 'พร้อมขาย' : 'ปิดการขาย'}
+                    </Badge>
                   </button>
 
                   <div className="flex items-center gap-1">
-                    <button
-                      type="button"
+                    <Button
+                      variant="outline"
+                      size="xs"
                       onClick={() => setImageModalProduct(product)}
-                      className="p-2 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 border border-slate-200/60 transition-colors"
                       title="จัดการรูปภาพ"
                     >
-                      <FontAwesomeIcon icon={faImage} className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
+                      <FontAwesomeIcon icon={faImage} className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="xs"
                       onClick={() => openEditModal(product)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200/70 transition-colors"
                     >
-                      <FontAwesomeIcon icon={faPenToSquare} className="w-3 h-3 text-slate-400" />
+                      <FontAwesomeIcon icon={faPenToSquare} className="w-3 h-3" />
                       <span>แก้ไข</span>
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="xs"
                       onClick={() => setDeletingProduct(product)}
-                      className="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-colors"
+                      className="text-semantic-red hover:bg-semantic-red-lt"
                       title="ลบสินค้า"
                     >
-                      <FontAwesomeIcon icon={faTrashCan} className="w-3.5 h-3.5" />
-                    </button>
+                      <FontAwesomeIcon icon={faTrashCan} className="w-3 h-3" />
+                    </Button>
                   </div>
                 </div>
-              </div>
+              </Card>
             );
           })
         ) : (
-          <div className="bg-white rounded-2xl p-8 text-center text-slate-400 text-xs border border-slate-200/80">
+          <Card className="p-8 text-center text-ink-muted text-xs">
             {loading ? 'กำลังโหลดรายการสินค้า...' : 'ไม่พบสินค้าตามเงื่อนไขที่ค้นหา'}
-          </div>
+          </Card>
         )}
       </div>
 
-      {/* ==================================================== */}
-      {/* DESKTOP TABLE (Visible on screens >= 1024px)         */}
-      {/* ==================================================== */}
-      <div className="hidden lg:block bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto touch-scroll">
-          <table className="w-full min-w-[750px] text-left text-sm text-slate-600">
-            <thead className="bg-slate-50/80 text-[11px] font-semibold uppercase tracking-wider text-slate-500 border-b border-slate-200/80">
-              <tr>
-                <th className="px-5 py-3.5 w-20">รูปภาพ</th>
-                <th className="px-5 py-3.5">ชื่อสินค้า & หมวดหมู่</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">ราคา</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">คงเหลือ / ขายแล้ว</th>
-                <th className="px-5 py-3.5 whitespace-nowrap">สถานะ</th>
-                <th className="px-5 py-3.5 text-right whitespace-nowrap">การจัดการ</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredProducts.length > 0 ? (
-                filteredProducts.map((product) => {
-                  const primaryImage =
-                    product.images?.find((img) => img.isPrimary) ||
-                    product.images?.[0];
-                  const isActive = product.status === 'ACTIVE';
-
-                  return (
-                    <tr
-                      key={product.id}
-                      className="bg-white hover:bg-slate-50/70 transition-colors"
-                    >
-                      {/* Image Thumbnail */}
-                      <td className="px-5 py-4">
-                        <div
-                          onClick={() => setImageModalProduct(product)}
-                          className="w-12 h-12 rounded-xl overflow-hidden bg-slate-50 border border-slate-200/70 cursor-pointer relative group flex items-center justify-center"
-                          title="คลิกเพื่อจัดการรูปภาพ"
-                        >
-                          {primaryImage ? (
-                            <img
-                              src={primaryImage.imageUrl}
-                              alt={product.name}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                            />
-                          ) : (
-                            <FontAwesomeIcon icon={faCakeCandles} className="w-5 h-5 text-slate-300" />
-                          )}
-                          <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                            <FontAwesomeIcon icon={faImage} className="w-3.5 h-3.5" />
-                          </div>
-                          {product.images && product.images.length > 1 && (
-                            <span className="absolute bottom-1 right-1 bg-slate-900/80 text-white text-[9px] font-mono px-1 rounded">
-                              +{product.images.length}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Name & Category */}
-                      <td className="px-5 py-4 min-w-[200px]">
-                        <div className="font-semibold text-slate-900 text-sm">
-                          {product.name}
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="inline-block whitespace-nowrap px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200/70">
-                            {product.category}
-                          </span>
-                          <span className="text-slate-400 text-xs line-clamp-1 max-w-xs">
-                            {product.description}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Price */}
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <span className="font-semibold text-slate-900 font-mono text-sm">
-                          ฿{product.price}
-                        </span>
-                      </td>
-
-                      {/* Stock & Sold */}
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <div className="text-xs">
-                          <span
-                            className={`font-semibold ${
-                              product.stock === 0
-                                ? 'text-rose-600'
-                                : product.stock <= 5
-                                ? 'text-amber-600'
-                                : 'text-slate-700'
-                            }`}
-                          >
-                            เหลือ {product.stock} ชิ้น
-                          </span>
-                          <span className="text-slate-400 block text-[11px] mt-0.5">
-                            ขายแล้ว {product.sold || 0} ชิ้น
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Status Toggle */}
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStatus(product)}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
-                            isActive
-                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200/70 hover:bg-emerald-100'
-                              : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
-                          }`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              isActive ? 'bg-emerald-500' : 'bg-slate-400'
-                            }`}
-                          />
-                          <span>{isActive ? 'พร้อมขาย' : 'ปิดการขาย'}</span>
-                        </button>
-                      </td>
-
-                      {/* Action Buttons */}
-                      <td className="px-5 py-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end space-x-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setImageModalProduct(product)}
-                            className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-                            title="จัดการรูปภาพ"
-                          >
-                            <FontAwesomeIcon icon={faImage} className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(product)}
-                            className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-                            title="แก้ไขข้อมูลสินค้า"
-                          >
-                            <FontAwesomeIcon icon={faPenToSquare} className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeletingProduct(product)}
-                            className="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                            title="ลบสินค้า"
-                          >
-                            <FontAwesomeIcon icon={faTrashCan} className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={6} className="text-center py-12 text-slate-400 text-xs">
-                    {loading ? 'กำลังโหลดรายการสินค้า...' : 'ไม่พบสินค้าตามเงื่อนไขที่ค้นหา'}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* Desktop DataTable (>= lg) */}
+      <div className="hidden lg:block">
+        <DataTable
+          data={filteredProducts}
+          columns={productColumns}
+          rowKey={(p) => p.id}
+          loading={loading}
+          loadingMessage="กำลังโหลดรายการสินค้า..."
+          emptyMessage="ไม่พบสินค้าตามเงื่อนไขที่ค้นหา"
+          defaultPageSize={10}
+        />
       </div>
 
-      {/* ==================================================== */}
-      {/* 1. ADD PRODUCT MODAL                                 */}
-      {/* ==================================================== */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-[95%] sm:w-full p-4 sm:p-6 shadow-2xl border border-bibi-200 relative animate-in fade-in zoom-in-95 max-h-[88vh] overflow-y-auto touch-scroll">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <h3 className="text-base sm:text-lg font-bold text-slate-800">
-                เพิ่มเมนูขนมใหม่
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsAddModalOpen(false)}
-                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                aria-label="ปิด"
-              >
-                <FontAwesomeIcon icon={faXmark} className="w-5 h-5" />
-              </button>
-            </div>
+      {/* 1. ADD PRODUCT MODAL */}
+      <Modal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        title="เพิ่มเมนูขนมใหม่"
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsAddModalOpen(false)}
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              type="submit"
+              form="add-product-form"
+              variant="primary"
+              size="sm"
+              isLoading={submitting}
+              disabled={uploadingImage}
+            >
+              บันทึกเมนูใหม่
+            </Button>
+          </>
+        }
+      >
+        <form id="add-product-form" onSubmit={handleAddSubmit} className="space-y-3.5">
+          <div>
+            <label className="block text-xs font-semibold text-ink-secondary mb-1">
+              ชื่อสินค้า *
+            </label>
+            <input
+              type="text"
+              required
+              autoFocus
+              placeholder="เช่น Strawberry Tartlet"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className={inputClass}
+            />
+          </div>
 
-            <form onSubmit={handleAddSubmit} className="mt-4 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  ชื่อสินค้า *
-                </label>
+          <div>
+            <label className="block text-xs font-semibold text-ink-secondary mb-1">
+              หมวดหมู่ *
+            </label>
+            <select
+              value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              className={inputClass}
+            >
+              {CATEGORIES.filter((c) => c !== 'ทั้งหมด').map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-ink-secondary mb-1">
+              คำอธิบายขนม
+            </label>
+            <textarea
+              rows={2}
+              placeholder="รสชาติ วัตถุดิบ ความอร่อย หรือเคล็ดลับ..."
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className={inputClass}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-ink-secondary mb-1">
+                ราคาขาย (บาท) *
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                required
+                value={formData.price}
+                onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+                className={`${inputClass} font-mono-num`}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-ink-secondary mb-1">
+                จำนวนสต็อกแรกเริ่ม *
+              </label>
+              <input
+                type="number"
+                min="0"
+                required
+                value={formData.stock}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    stock: Number(e.target.value),
+                    initialStock: Number(e.target.value),
+                  })
+                }
+                className={`${inputClass} font-mono-num`}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-ink-secondary">
+              รูปภาพหลักของสินค้า
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary-lt hover:bg-primary-md text-primary-text text-xs font-medium border border-primary/25 transition-colors">
+                <FontAwesomeIcon icon={faArrowUpFromBracket} className="w-3.5 h-3.5" />
+                <span>{uploadingImage ? 'กำลังอัปโหลด...' : 'เลือกไฟล์จากเครื่อง'}</span>
                 <input
-                  type="text"
-                  required
-                  placeholder="เช่น Strawberry Tartlet"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 focus:border-bibi-400 focus:ring-2 focus:ring-bibi-200/50 outline-none text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  หมวดหมู่ *
-                </label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 focus:border-bibi-400 outline-none text-sm bg-white"
-                >
-                  {CATEGORIES.filter((c) => c !== 'ทั้งหมด').map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  คำอธิบายขนม
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="รสชาติ วัตถุดิบ ความอร่อย หรือเคล็ดลับ..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 focus:border-bibi-400 focus:ring-2 focus:ring-bibi-200/50 outline-none text-sm"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    ราคาขาย (บาท) *
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    required
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 focus:border-bibi-400 outline-none text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    จำนวนสต็อกแรกเริ่ม *
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={formData.stock}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        stock: Number(e.target.value),
-                        initialStock: Number(e.target.value),
-                      })
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const url = await handleFileUpload(file);
+                      if (url) setFormData((prev) => ({ ...prev, imageUrl: url }));
                     }
-                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 focus:border-bibi-400 outline-none text-sm"
-                  />
-                </div>
-              </div>
-
-              {/* Initial Image Upload or URL */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  รูปภาพหลักของสินค้า
-                </label>
-                <div className="space-y-2">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <label className="cursor-pointer inline-flex items-center justify-center space-x-1.5 px-3.5 py-2.5 min-h-[44px] rounded-2xl bg-bibi-50 hover:bg-bibi-100 text-bibi-700 text-xs font-semibold border border-bibi-200 transition-colors">
-                      <FontAwesomeIcon icon={faArrowUpFromBracket} className="w-3.5 h-3.5" />
-                      <span>{uploadingImage ? 'กำลังอัปโหลด...' : 'เลือกไฟล์จากเครื่อง'}</span>
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const url = await handleFileUpload(file);
-                            if (url) setFormData((prev) => ({ ...prev, imageUrl: url }));
-                          }
-                        }}
-                      />
-                    </label>
-                    <span className="text-xs text-slate-400">หรือระบุ URL รูปภาพ:</span>
-                  </div>
-
-                  <input
-                    type="url"
-                    placeholder="https://..."
-                    value={formData.imageUrl}
-                    onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 focus:border-bibi-400 outline-none text-xs"
-                  />
-
-                  {formData.imageUrl && (
-                    <div className="mt-2 w-20 h-20 rounded-2xl overflow-hidden border border-bibi-200 bg-bibi-50">
-                      <img
-                        src={formData.imageUrl}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  )}
-
-                  {imageUploadError && (
-                    <p className="text-xs text-rose-500">{imageUploadError}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Submit Buttons */}
-              <div className="pt-4 border-t border-slate-100 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold flex items-center justify-center transition-colors"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting || uploadingImage}
-                  className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl bg-bibi-400 hover:bg-bibi-500 text-white text-xs font-bold transition-all shadow-sm disabled:opacity-50 flex items-center justify-center"
-                >
-                  {submitting ? 'กำลังบันทึก...' : 'บันทึกเมนูใหม่'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ==================================================== */}
-      {/* 2. EDIT PRODUCT MODAL                                */}
-      {/* ==================================================== */}
-      {editingProduct && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-[95%] sm:w-full p-4 sm:p-6 shadow-2xl border border-bibi-200 relative animate-in fade-in zoom-in-95 max-h-[88vh] overflow-y-auto touch-scroll">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <h3 className="text-base sm:text-lg font-bold text-slate-800">
-                แก้ไขเมนู: {editingProduct.name}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setEditingProduct(null)}
-                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                aria-label="ปิด"
-              >
-                <FontAwesomeIcon icon={faXmark} className="w-5 h-5" />
-              </button>
+                  }}
+                />
+              </label>
+              <span className="text-xs text-ink-muted">หรือระบุ URL:</span>
             </div>
 
-            <form onSubmit={handleEditSubmit} className="mt-4 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  ชื่อสินค้า *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 focus:border-bibi-400 outline-none text-sm"
+            <input
+              type="url"
+              placeholder="https://..."
+              value={formData.imageUrl}
+              onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+              className={`${inputClass} text-xs`}
+            />
+
+            {formData.imageUrl && (
+              <div className="w-16 h-16 rounded overflow-hidden border border-surface-border bg-surface-secondary">
+                <img
+                  src={formData.imageUrl}
+                  alt="Preview"
+                  className="w-full h-full object-cover"
                 />
               </div>
+            )}
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  หมวดหมู่ *
-                </label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 focus:border-bibi-400 outline-none text-sm bg-white"
-                >
-                  {CATEGORIES.filter((c) => c !== 'ทั้งหมด').map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  คำอธิบายขนม
-                </label>
-                <textarea
-                  rows={3}
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 focus:border-bibi-400 outline-none text-sm"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    ราคาขาย (บาท) *
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    required
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 focus:border-bibi-400 outline-none text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    สต็อกคงเหลือ *
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={formData.stock}
-                    onChange={(e) => setFormData({ ...formData, stock: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 focus:border-bibi-400 outline-none text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    สต็อกตั้งต้น
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.initialStock}
-                    onChange={(e) =>
-                      setFormData({ ...formData, initialStock: Number(e.target.value) })
-                    }
-                    className="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 focus:border-bibi-400 outline-none text-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingProduct(null)}
-                  className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold flex items-center justify-center transition-colors"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold transition-all shadow-sm disabled:opacity-50 flex items-center justify-center"
-                >
-                  {submitting ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
-                </button>
-              </div>
-            </form>
+            {imageUploadError && (
+              <p className="text-xs text-semantic-red">{imageUploadError}</p>
+            )}
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
-      {/* ==================================================== */}
-      {/* 3. DELETE CONFIRMATION MODAL                         */}
-      {/* ==================================================== */}
-      {deletingProduct && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white rounded-3xl max-w-md w-[95%] sm:w-full p-4 sm:p-6 shadow-2xl border border-rose-200 relative animate-in fade-in zoom-in-95 max-h-[88vh] overflow-y-auto touch-scroll">
-            <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 text-rose-500 flex items-center justify-center text-xl mb-4">
-              <FontAwesomeIcon icon={faTriangleExclamation} className="w-5 h-5" />
+      {/* 2. EDIT PRODUCT MODAL */}
+      <Modal
+        isOpen={Boolean(editingProduct)}
+        onClose={() => setEditingProduct(null)}
+        title={editingProduct ? `แก้ไขเมนู: ${editingProduct.name}` : undefined}
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setEditingProduct(null)}
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              type="submit"
+              form="edit-product-form"
+              variant="primary"
+              size="sm"
+              isLoading={submitting}
+            >
+              บันทึกการแก้ไข
+            </Button>
+          </>
+        }
+      >
+        <form id="edit-product-form" onSubmit={handleEditSubmit} className="space-y-3.5">
+          <div>
+            <label className="block text-xs font-semibold text-ink-secondary mb-1">
+              ชื่อสินค้า *
+            </label>
+            <input
+              type="text"
+              required
+              autoFocus
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className={inputClass}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-ink-secondary mb-1">
+              หมวดหมู่ *
+            </label>
+            <select
+              value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              className={inputClass}
+            >
+              {CATEGORIES.filter((c) => c !== 'ทั้งหมด').map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-ink-secondary mb-1">
+              คำอธิบายขนม
+            </label>
+            <textarea
+              rows={3}
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className={inputClass}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-ink-secondary mb-1">
+                ราคาขาย (บาท) *
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                required
+                value={formData.price}
+                onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+                className={`${inputClass} font-mono-num`}
+              />
             </div>
-
-            <h3 className="text-base sm:text-lg font-bold text-slate-800">
-              ยืนยันการลบเมนู {deletingProduct.name}?
-            </h3>
-            <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-              การลบเมนูนี้จะนำสินค้าออกจากหน้าร้าน แต่{' '}
-              <strong className="text-slate-700">ประวัติการสั่งซื้อย้อนหลังของลูกค้าจะยังคงปลอดภัยและสมบูรณ์</strong>{' '}
-              ไม่สูญหาย
-            </p>
-
-            <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setDeletingProduct(null)}
-                className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold flex items-center justify-center transition-colors"
-              >
-                ยกเลิก
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteConfirm}
-                disabled={submitting}
-                className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold transition-all shadow-sm disabled:opacity-50 flex items-center justify-center"
-              >
-                {submitting ? 'กำลังลบ...' : 'ยืนยันการลบ'}
-              </button>
+            <div>
+              <label className="block text-xs font-semibold text-ink-secondary mb-1">
+                สต็อกคงเหลือ *
+              </label>
+              <input
+                type="number"
+                min="0"
+                required
+                value={formData.stock}
+                onChange={(e) => setFormData({ ...formData, stock: Number(e.target.value) })}
+                className={`${inputClass} font-mono-num`}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-ink-secondary mb-1">
+                สต็อกตั้งต้น
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={formData.initialStock}
+                onChange={(e) =>
+                  setFormData({ ...formData, initialStock: Number(e.target.value) })
+                }
+                className={`${inputClass} font-mono-num`}
+              />
             </div>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
-      {/* ==================================================== */}
-      {/* 4. MULTI-IMAGE MANAGEMENT MODAL                      */}
-      {/* ==================================================== */}
-      {imageModalProduct && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-[95%] sm:w-full p-4 sm:p-6 shadow-2xl border border-bibi-200 relative animate-in fade-in zoom-in-95 max-h-[88vh] overflow-y-auto touch-scroll">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+      {/* 3. DELETE CONFIRMATION MODAL */}
+      <Modal
+        isOpen={Boolean(deletingProduct)}
+        onClose={() => setDeletingProduct(null)}
+        size="sm"
+        title={deletingProduct ? `ยืนยันการลบเมนู ${deletingProduct.name}?` : undefined}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              autoFocus
+              onClick={() => setDeletingProduct(null)}
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              isLoading={submitting}
+              onClick={handleDeleteConfirm}
+            >
+              ยืนยันการลบ
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3 text-xs">
+          <div className="w-10 h-10 rounded bg-semantic-red-lt text-semantic-red flex items-center justify-center">
+            <FontAwesomeIcon icon={faTriangleExclamation} className="w-4 h-4" />
+          </div>
+          <p className="text-ink-secondary leading-relaxed">
+            การลบเมนูนี้จะนำสินค้าออกจากหน้าร้าน แต่{' '}
+            <strong className="text-ink">ประวัติการสั่งซื้อย้อนหลังของลูกค้าจะยังคงปลอดภัย</strong>{' '}
+            ไม่สูญหาย
+          </p>
+        </div>
+      </Modal>
+
+      {/* 4. MULTI-IMAGE MANAGEMENT MODAL */}
+      <Modal
+        isOpen={Boolean(imageModalProduct)}
+        onClose={() => setImageModalProduct(null)}
+        size="lg"
+        title={
+          imageModalProduct ? `จัดการรูปภาพ: ${imageModalProduct.name}` : undefined
+        }
+        subtitle="อัปโหลดรูปภาพ จัดลำดับรูป หรือตั้งค่าเป็นรูปภาพหลัก"
+        footer={
+          <Button variant="primary" size="sm" onClick={() => setImageModalProduct(null)}>
+            เสร็จสิ้น
+          </Button>
+        }
+      >
+        {imageModalProduct && (
+          <div className="space-y-4">
+            <div className="p-3.5 rounded bg-primary-lt border border-dashed border-primary/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h3 className="text-base sm:text-lg font-bold text-slate-800">
-                  จัดการรูปภาพ: {imageModalProduct.name}
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  อัปโหลดรูปภาพ จัดลำดับรูป หรือตั้งค่าเป็นรูปภาพหลัก
+                <div className="text-xs font-semibold text-ink flex items-center gap-1.5">
+                  <FontAwesomeIcon
+                    icon={faArrowUpFromBracket}
+                    className="w-3.5 h-3.5 text-primary-text"
+                  />
+                  <span>อัปโหลดรูปภาพใหม่สำหรับสินค้านี้</span>
+                </div>
+                <p className="text-[11px] text-ink-secondary mt-0.5">
+                  รองรับ JPG, PNG, WebP ขนาดไม่เกิน 5MB
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setImageModalProduct(null)}
-                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                aria-label="ปิด"
-              >
-                <FontAwesomeIcon icon={faXmark} className="w-5 h-5" />
-              </button>
+
+              <label className="cursor-pointer px-3.5 py-2 rounded bg-primary hover:bg-primary-dk text-white text-xs font-medium transition-colors inline-flex items-center justify-center gap-1.5 shrink-0">
+                <FontAwesomeIcon icon={faArrowUpFromBracket} className="w-3.5 h-3.5" />
+                <span>{uploadingImage ? 'กำลังอัปโหลด...' : 'เลือกไฟล์รูปภาพ'}</span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  disabled={uploadingImage}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const url = await handleFileUpload(file);
+                      if (url) await handleAddImageToProduct(url);
+                    }
+                  }}
+                />
+              </label>
             </div>
 
-            {/* Upload Area */}
-            <div className="my-4 p-3.5 sm:p-4 rounded-2xl bg-bibi-50/70 border border-dashed border-bibi-300">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <FontAwesomeIcon icon={faArrowUpFromBracket} className="w-3.5 h-3.5 text-bibi-500" />
-                    <span>อัปโหลดรูปภาพใหม่สำหรับสินค้านี้</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    รองรับ JPG, PNG, WebP ขนาดไม่เกิน 5MB
-                  </p>
-                </div>
+            {imageUploadError && (
+              <p className="text-xs text-semantic-red">{imageUploadError}</p>
+            )}
 
-                <label className="cursor-pointer px-4 py-2.5 min-h-[44px] rounded-2xl bg-bibi-400 hover:bg-bibi-500 text-white text-xs font-bold transition-all shadow-sm flex items-center justify-center space-x-1.5">
-                  <FontAwesomeIcon icon={faArrowUpFromBracket} className="w-3.5 h-3.5" />
-                  <span>{uploadingImage ? 'กำลังอัปโหลด...' : 'เลือกไฟล์รูปภาพ'}</span>
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    className="hidden"
-                    disabled={uploadingImage}
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const url = await handleFileUpload(file);
-                        if (url) await handleAddImageToProduct(url);
-                      }
-                    }}
-                  />
-                </label>
-              </div>
-
-              {imageUploadError && (
-                <p className="text-xs text-rose-500 mt-2">{imageUploadError}</p>
-              )}
-            </div>
-
-            {/* Images List */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+            <div className="space-y-2.5">
+              <h4 className="text-xs font-semibold text-ink-muted uppercase tracking-wider">
                 รูปภาพทั้งหมด ({imageModalProduct.images?.length || 0} รูป)
               </h4>
 
               {imageModalProduct.images && imageModalProduct.images.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {imageModalProduct.images.map((img, idx) => (
                     <div
                       key={img.id}
-                      className={`p-3 rounded-2xl border transition-all flex items-center space-x-3 ${
+                      className={`p-2.5 rounded border flex items-center gap-3 ${
                         img.isPrimary
-                          ? 'border-amber-300 bg-amber-50/50 shadow-sm'
-                          : 'border-slate-200 bg-white hover:border-bibi-200'
+                          ? 'border-primary bg-primary-lt'
+                          : 'border-surface-border bg-surface'
                       }`}
                     >
-                      <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-200">
+                      <div className="w-14 h-14 rounded overflow-hidden bg-surface-secondary shrink-0 border border-surface-border">
                         <img
                           src={img.imageUrl}
                           alt="Product"
@@ -1190,32 +1114,33 @@ export default function AdminProductsPage() {
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center space-x-1.5 mb-1.5">
+                        <div className="flex items-center gap-1.5 mb-1.5">
                           {img.isPrimary ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-400 text-amber-950 font-bold text-[10px] shadow-sm">
-                              <FontAwesomeIcon icon={faStar} className="w-2.5 h-2.5" /> รูปหลัก
-                            </span>
+                            <Badge variant="primary" size="sm">
+                              <FontAwesomeIcon icon={faStar} className="w-2.5 h-2.5" />
+                              <span>รูปหลัก</span>
+                            </Badge>
                           ) : (
                             <button
                               type="button"
                               onClick={() => handleSetPrimaryImage(img.id)}
-                              className="text-[10px] text-slate-500 hover:text-amber-600 font-semibold flex items-center gap-1 hover:underline"
+                              className="text-[11px] text-ink-secondary hover:text-primary-text font-medium inline-flex items-center gap-1 hover:underline"
                             >
-                              <FontAwesomeIcon icon={faStar} className="w-2.5 h-2.5" /> ตั้งเป็นรูปหลัก
+                              <FontAwesomeIcon icon={faStar} className="w-2.5 h-2.5" />
+                              <span>ตั้งเป็นรูปหลัก</span>
                             </button>
                           )}
-                          <span className="text-[10px] text-slate-400">
-                            ลำดับ #{idx + 1}
+                          <span className="text-[10px] text-ink-muted font-mono-num">
+                            #{idx + 1}
                           </span>
                         </div>
 
-                        {/* Image actions: Up, Down, Delete */}
-                        <div className="flex items-center space-x-1">
+                        <div className="flex items-center gap-1">
                           <button
                             type="button"
                             disabled={idx === 0}
                             onClick={() => handleReorderImage(idx, 'UP')}
-                            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+                            className="p-1 rounded text-ink-muted hover:text-ink hover:bg-surface-secondary disabled:opacity-30"
                             title="เลื่อนขึ้น"
                           >
                             <FontAwesomeIcon icon={faArrowUp} className="w-3 h-3" />
@@ -1224,7 +1149,7 @@ export default function AdminProductsPage() {
                             type="button"
                             disabled={idx === (imageModalProduct.images?.length || 1) - 1}
                             onClick={() => handleReorderImage(idx, 'DOWN')}
-                            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+                            className="p-1 rounded text-ink-muted hover:text-ink hover:bg-surface-secondary disabled:opacity-30"
                             title="เลื่อนลง"
                           >
                             <FontAwesomeIcon icon={faArrowDown} className="w-3 h-3" />
@@ -1232,7 +1157,7 @@ export default function AdminProductsPage() {
                           <button
                             type="button"
                             onClick={() => handleDeleteImage(img.id)}
-                            className="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50"
+                            className="p-1 rounded text-ink-muted hover:text-semantic-red hover:bg-semantic-red-lt"
                             title="ลบรูปนี้"
                           >
                             <FontAwesomeIcon icon={faTrashCan} className="w-3 h-3" />
@@ -1243,24 +1168,22 @@ export default function AdminProductsPage() {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-slate-400 text-xs">
+                <div className="text-center py-8 text-ink-muted text-xs">
                   ยังไม่มีรูปภาพสำหรับสินค้านี้
                 </div>
               )}
             </div>
-
-            <div className="mt-6 pt-4 border-t border-slate-100 flex flex-col sm:flex-row justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setImageModalProduct(null)}
-                className="w-full sm:w-auto min-h-[44px] px-6 py-2.5 rounded-xl bg-bibi-400 hover:bg-bibi-500 text-white text-xs font-bold transition-all shadow-sm flex items-center justify-center"
-              >
-                เสร็จสิ้น
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
+  );
+}
+
+export default function AdminProductsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-ink-muted text-xs">กำลังโหลด...</div>}>
+      <ProductsContent />
+    </Suspense>
   );
 }
