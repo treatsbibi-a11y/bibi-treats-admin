@@ -19,14 +19,17 @@ import {
   faCheck,
   faArrowRight,
   faChevronDown,
+  faDownload,
 } from '@fortawesome/free-solid-svg-icons';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { useSmartPolling } from '@/hooks/useSmartPolling';
 import { Modal } from '@/components/ui/Modal';
 import { DropdownMenu } from '@/components/ui/DropdownMenu';
 import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
 import { showToast } from '@/components/ui/Toast';
+import { downloadImageAsJpeg } from '@/lib/image-utils';
 import { OrderStatusBadge, ORDER_STATUS_LIST } from '@/components/admin/OrderStatusBadge';
 import OrderReceiptModal from '@/components/admin/OrderReceiptModal';
 import ShopQrModal, { ShopPaymentInfo } from '@/components/admin/ShopQrModal';
@@ -35,15 +38,20 @@ import { OrderDetail, OrderStatus } from '@/types';
 const STATUS_TABS: { key: string; label: string }[] = [
   { key: 'ALL', label: 'ทั้งหมด' },
   { key: 'PENDING', label: 'รอยืนยัน' },
-  { key: 'CONFIRMED', label: 'ยืนยันแล้ว' },
+  { key: 'CONFIRMED', label: 'รอชำระ' },
+  { key: 'SLIP_UPLOADED', label: 'รอตรวจสลิป' },
   { key: 'PREPARING', label: 'กำลังเตรียม' },
-  { key: 'SHIPPING', label: 'กำลังจัดส่ง' },
-  { key: 'COMPLETED', label: 'สำเร็จ' },
+  { key: 'SHIPPING', label: 'จัดส่ง' },
+  { key: 'COMPLETED', label: 'เสร็จสิ้น' },
   { key: 'CANCELLED', label: 'ยกเลิก' },
 ];
 
+function getPaymentMethodLabel(method: OrderDetail['paymentMethod']) {
+  return method === 'COD' ? 'เก็บเงินปลายทาง' : 'PromptPay';
+}
+
 const DEFAULT_PAYMENT_INFO: ShopPaymentInfo = {
-  qrImageUrl: '/uploads/bibi-1795444192478-qiwqv1g.jpg',
+  qrImageUrl: '/images/thai-qr-payment.jpg',
   bankName: 'ธนาคารกสิกรไทย (Kasikorn Bank)',
   bankAccountNo: '142-1-52907-4',
   promptpayNumber: '086-296-5765',
@@ -69,25 +77,29 @@ function OrdersContent() {
   const [viewingReceiptOrder, setViewingReceiptOrder] = useState<OrderDetail | null>(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
 
-  const fetchOrders = async () => {
-    setLoading(true);
+  const fetchOrders = async (silentOrEvent?: boolean | unknown) => {
+    const silent = silentOrEvent === true;
+    if (!silent) setLoading(true);
     try {
-      const res = await fetch('/api/orders');
+      const res = await fetch('/api/orders', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setOrders(data);
+        setSelectedOrder((curr) =>
+          curr ? data.find((o: OrderDetail) => o.id === curr.id) || curr : null
+        );
       }
     } catch (err) {
       console.error('Failed to fetch orders', err);
-      showToast({ title: 'โหลดข้อมูลคำสั่งซื้อไม่สำเร็จ', variant: 'error' });
+      if (!silent) showToast({ title: 'โหลดข้อมูลคำสั่งซื้อไม่สำเร็จ', variant: 'error' });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch('/api/admin/settings');
+      const res = await fetch('/api/admin/settings', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setShopSettings({
@@ -103,9 +115,14 @@ function OrdersContent() {
   };
 
   useEffect(() => {
-    fetchOrders();
+    fetchOrders(false);
     fetchSettings();
   }, []);
+
+  useSmartPolling(() => {
+    fetchOrders(true);
+    fetchSettings();
+  }, 3000);
 
   useEffect(() => {
     const s = searchParams.get('status');
@@ -141,7 +158,18 @@ function OrdersContent() {
           variant: 'error',
         });
       } else {
-        showToast({ title: 'อัปเดตสถานะคำสั่งซื้อแล้ว', variant: 'success' });
+        const updatedOrder = await res.json().catch(() => null);
+        if (updatedOrder?.id) {
+          setOrders((prev) => prev.map((o) => (o.id === updatedOrder.id ? updatedOrder : o)));
+          setSelectedOrder((prev) => (prev && prev.id === updatedOrder.id ? updatedOrder : prev));
+        }
+        if (newStatus === 'CONFIRMED') {
+          showToast({ title: 'ยืนยันออเดอร์แล้ว', variant: 'success' });
+        } else if (newStatus === 'CANCELLED') {
+          showToast({ title: 'ปฏิเสธออเดอร์และคืนสต็อกแล้ว', variant: 'warning' });
+        } else {
+          showToast({ title: 'อัปเดตสถานะคำสั่งซื้อแล้ว', variant: 'success' });
+        }
       }
     } catch {
       setOrders(prevOrders);
@@ -222,17 +250,30 @@ function OrdersContent() {
       sortable: true,
       sortValue: (o) => o.orderNumber,
       render: (order) => (
-        <div>
-          <div className="font-mono-num font-semibold text-ink text-[13px]">
-            #{order.orderNumber}
+        <div className="space-y-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar touch-scroll pb-0.5 sm:flex-wrap sm:overflow-visible">
+            <span className="font-mono-num font-semibold text-ink text-[13px]">
+              #{order.orderNumber}
+            </span>
+            {order.status === 'PENDING' && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-semantic-yellow-lt text-semantic-yellow border border-semantic-yellow/40">
+                ออเดอร์ใหม่
+              </span>
+            )}
           </div>
-          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+          <div className="text-[11px] text-ink-muted font-mono-num">
+            {new Date(order.createdAt).toLocaleString('th-TH', {
+              dateStyle: 'short',
+              timeStyle: 'short',
+            })}
+          </div>
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar touch-scroll pb-0.5 sm:flex-wrap sm:overflow-visible">
             <Badge variant={order.paymentMethod === 'COD' ? 'warning' : 'neutral'} size="sm">
               <FontAwesomeIcon
                 icon={order.paymentMethod === 'COD' ? faTruck : faQrcode}
                 className="w-2.5 h-2.5"
               />
-              <span>{order.paymentMethod === 'COD' ? 'COD' : 'โอนเงิน/QR'}</span>
+              <span>{getPaymentMethodLabel(order.paymentMethod)}</span>
             </Badge>
 
             {order.slipUrl && (
@@ -242,11 +283,15 @@ function OrdersContent() {
                   e.stopPropagation();
                   setViewingSlipUrl(order.slipUrl!);
                 }}
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-medium bg-semantic-green-lt text-semantic-green border border-semantic-green/25 hover:opacity-85 transition-opacity"
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-medium border transition-opacity hover:opacity-85 ${
+                  order.status === 'SLIP_UPLOADED'
+                    ? 'bg-semantic-blue-lt text-semantic-blue border-semantic-blue/40 font-semibold ring-1 ring-semantic-blue/25'
+                    : 'bg-semantic-green-lt text-semantic-green border-semantic-green/25'
+                }`}
                 title="คลิกเพื่อดูสลิปโอนเงิน"
               >
                 <FontAwesomeIcon icon={faReceipt} className="w-2.5 h-2.5" />
-                <span>สลิป</span>
+                <span>{order.status === 'SLIP_UPLOADED' ? 'ตรวจสลิป' : 'สลิป'}</span>
               </button>
             )}
           </div>
@@ -259,7 +304,7 @@ function OrdersContent() {
       sortable: true,
       sortValue: (o) => o.customer.name,
       render: (order) => (
-        <div className="min-w-[140px]">
+        <div className="min-w-0">
           <div className="font-medium text-ink truncate">{order.customer.name}</div>
           <div className="flex items-center gap-1.5 text-[11px] text-ink-muted mt-0.5">
             <span className="font-mono-num">{order.customer.phone}</span>
@@ -278,12 +323,12 @@ function OrdersContent() {
       render: (order) => {
         const itemCount = order.items.reduce((acc, i) => acc + i.quantity, 0);
         return (
-          <div className="flex items-center gap-1.5 max-w-[260px]">
-            <Badge variant="neutral" size="sm">
+          <div className="flex items-start gap-1.5 max-w-[260px]">
+            <Badge variant="neutral" size="sm" className="shrink-0">
               <span className="font-mono-num">{itemCount} ชิ้น</span>
             </Badge>
-            <span className="text-xs text-ink-secondary truncate">
-              {order.items.map((i) => `${i.productName} (x${i.quantity})`).join(', ')}
+            <span className="text-xs text-ink-secondary line-clamp-2">
+              {order.items.map((i) => `${i.productName} ×${i.quantity}`).join(', ')}
             </span>
           </div>
         );
@@ -298,26 +343,12 @@ function OrdersContent() {
       render: (order) => (
         <div className="whitespace-nowrap">
           <div className="font-mono-num font-semibold text-ink">
-            ฿{order.total.toLocaleString()}
+            ฿{(order.total ?? 0).toLocaleString()}
           </div>
           <div className="text-[10px] text-ink-muted font-mono-num">
-            ส่ง ฿{order.shippingFee}
+            รวม ฿{(order.subtotal ?? 0).toLocaleString()} · ส่ง ฿{(order.shippingFee ?? 0).toLocaleString()}
           </div>
         </div>
-      ),
-    },
-    {
-      key: 'createdAt',
-      header: 'วันที่ / เวลา',
-      sortable: true,
-      sortValue: (o) => new Date(o.createdAt).getTime(),
-      render: (order) => (
-        <span className="text-xs text-ink-secondary font-mono-num whitespace-nowrap">
-          {new Date(order.createdAt).toLocaleString('th-TH', {
-            dateStyle: 'short',
-            timeStyle: 'short',
-          })}
-        </span>
       ),
     },
     {
@@ -333,7 +364,66 @@ function OrdersContent() {
       header: 'การจัดการ',
       align: 'right',
       render: (order) => (
-        <div className="flex items-center justify-end gap-1.5">
+        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+          {order.status === 'PENDING' && (
+            <>
+              <Button
+                variant="primary"
+                size="xs"
+                disabled={updatingStatus}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleUpdateStatus(order.id, 'CONFIRMED');
+                }}
+                className="bg-semantic-green hover:opacity-90 border-transparent"
+              >
+                <span>ยืนยัน</span>
+              </Button>
+              <Button
+                variant="danger"
+                size="xs"
+                disabled={updatingStatus}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleUpdateStatus(order.id, 'CANCELLED');
+                }}
+              >
+                <span>ปฏิเสธ</span>
+              </Button>
+            </>
+          )}
+
+          {order.status === 'SLIP_UPLOADED' && (
+            <>
+              {order.slipUrl && (
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewingSlipUrl(order.slipUrl!);
+                  }}
+                  className="border-semantic-blue/40 text-semantic-blue bg-semantic-blue-lt"
+                >
+                  <FontAwesomeIcon icon={faReceipt} className="w-3 h-3" />
+                  <span>ดูสลิป</span>
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                size="xs"
+                disabled={updatingStatus}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleUpdateStatus(order.id, 'PREPARING');
+                }}
+              >
+                <FontAwesomeIcon icon={faKitchenSet} className="w-3 h-3" />
+                <span>กำลังเตรียมสินค้า</span>
+              </Button>
+            </>
+          )}
+
           <button
             type="button"
             onClick={(e) => {
@@ -341,12 +431,12 @@ function OrdersContent() {
               setViewingReceiptOrder(order);
             }}
             className="p-1.5 h-7 w-7 inline-flex items-center justify-center rounded border border-surface-border bg-surface hover:bg-surface-secondary text-ink-muted hover:text-primary-text transition-colors"
-            title="ดู/พิมพ์ใบเสร็จ 80mm"
+            title="ดู/พิมพ์ใบเสร็จ"
           >
             <FontAwesomeIcon icon={faReceipt} className="w-3.5 h-3.5" />
           </button>
           <Button
-            variant="primary"
+            variant={order.status === 'PENDING' || order.status === 'SLIP_UPLOADED' ? 'outline' : 'primary'}
             size="xs"
             onClick={(e) => {
               e.stopPropagation();
@@ -373,9 +463,6 @@ function OrdersContent() {
           <h1 className="text-lg sm:text-xl font-semibold text-ink tracking-tight">
             รายการคำสั่งซื้อ
           </h1>
-          <p className="text-xs sm:text-[13px] text-ink-secondary mt-0.5">
-            ตรวจสอบออเดอร์ จัดการสถานะ และหลักฐานการชำระเงิน
-          </p>
         </div>
 
         <Button variant="outline" size="sm" onClick={fetchOrders} disabled={loading}>
@@ -389,7 +476,7 @@ function OrdersContent() {
 
       {/* Filter Tabs & Search Card */}
       <Card className="p-3.5 space-y-3">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar touch-scroll pb-0.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar touch-scroll pb-0.5 sm:flex-wrap sm:overflow-visible">
           {STATUS_TABS.map((tab) => {
             const count = getStatusCount(tab.key);
             const isActive = activeTab === tab.key;
@@ -411,6 +498,8 @@ function OrdersContent() {
                       ? 'bg-white/20 text-white'
                       : tab.key === 'PENDING' && count > 0
                       ? 'bg-semantic-yellow-lt text-semantic-yellow font-semibold'
+                      : tab.key === 'SLIP_UPLOADED' && count > 0
+                      ? 'bg-semantic-blue-lt text-semantic-blue font-semibold'
                       : 'bg-surface text-ink-muted'
                   }`}
                 >
@@ -436,8 +525,8 @@ function OrdersContent() {
         </div>
       </Card>
 
-      {/* Mobile Cards (< lg) */}
-      <div className="lg:hidden space-y-2.5">
+      {/* Mobile & Tablet Cards (< lg) */}
+      <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-3">
         {filteredOrders.length > 0 ? (
           filteredOrders.map((order) => {
             const itemCount = order.items.reduce((acc, i) => acc + i.quantity, 0);
@@ -445,8 +534,23 @@ function OrdersContent() {
               <Card
                 key={order.id}
                 onClick={() => setSelectedOrder(order)}
-                className="p-3.5 space-y-2.5 cursor-pointer hover:bg-surface-secondary/50 transition-colors"
+                className={`p-3.5 space-y-2.5 cursor-pointer hover:bg-surface-secondary/50 transition-colors ${
+                  order.status === 'PENDING'
+                    ? 'border-semantic-yellow/50 ring-1 ring-semantic-yellow/20'
+                    : order.status === 'SLIP_UPLOADED'
+                    ? 'border-semantic-blue/50 ring-1 ring-semantic-blue/20'
+                    : ''
+                }`}
               >
+                {order.status === 'PENDING' && (
+                  <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-semantic-yellow/25">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-semantic-yellow-lt text-semantic-yellow border border-semantic-yellow/40 animate-pulse">
+                      🔔 มีคำสั่งซื้อใหม่
+                    </span>
+                    <span className="text-[10px] text-ink-muted">รอร้านยืนยันรับออเดอร์</span>
+                  </div>
+                )}
+
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="font-semibold text-ink font-mono-num text-sm">
@@ -461,7 +565,7 @@ function OrdersContent() {
                           icon={order.paymentMethod === 'COD' ? faTruck : faQrcode}
                           className="w-2.5 h-2.5"
                         />
-                        <span>{order.paymentMethod === 'COD' ? 'COD' : 'โอนเงิน/QR'}</span>
+                        <span>{getPaymentMethodLabel(order.paymentMethod)}</span>
                       </Badge>
 
                       {order.slipUrl && (
@@ -471,10 +575,14 @@ function OrdersContent() {
                             e.stopPropagation();
                             setViewingSlipUrl(order.slipUrl!);
                           }}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-semantic-green-lt text-semantic-green border border-semantic-green/25"
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                            order.status === 'SLIP_UPLOADED'
+                              ? 'bg-semantic-blue-lt text-semantic-blue border-semantic-blue/40 font-semibold'
+                              : 'bg-semantic-green-lt text-semantic-green border-semantic-green/25'
+                          }`}
                         >
                           <FontAwesomeIcon icon={faReceipt} className="w-2.5 h-2.5" />
-                          <span>ดูสลิป</span>
+                          <span>{order.status === 'SLIP_UPLOADED' ? 'ดูสลิปที่แนบ' : 'ดูสลิป'}</span>
                         </button>
                       )}
                     </div>
@@ -502,56 +610,142 @@ function OrdersContent() {
                   )}
                 </div>
 
-                <div className="text-xs text-ink-secondary">
-                  <span className="font-medium text-ink">{itemCount} ชิ้น: </span>
-                  <span className="line-clamp-1">
-                    {order.items.map((i) => `${i.productName} (x${i.quantity})`).join(', ')}
-                  </span>
+                <div className="text-xs text-ink-secondary space-y-1">
+                  <div className="font-medium text-ink">รายการสินค้า ({itemCount} ชิ้น):</div>
+                  <div className="space-y-0.5 pl-1">
+                    {order.items.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between gap-2 text-[11px]">
+                        <span className="truncate">
+                          • {item.productName} <span className="font-mono-num text-ink">× {item.quantity}</span>
+                        </span>
+                        <span className="font-mono-num text-ink shrink-0">
+                          ฿{(item.subtotal ?? 0).toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="pt-2 border-t border-surface-border-light flex items-center justify-between gap-2">
-                  <div>
-                    <div className="font-semibold text-ink font-mono-num text-sm">
-                      ฿{(order.total ?? 0).toLocaleString()}
+                {order.status === 'SLIP_UPLOADED' && order.slipUrl && (
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setViewingSlipUrl(order.slipUrl!);
+                    }}
+                    className="p-2.5 rounded bg-semantic-blue-lt border border-semantic-blue/30 flex items-center justify-between gap-2.5"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <img
+                        src={order.slipUrl}
+                        alt="Slip preview"
+                        className="w-11 h-11 rounded object-cover border border-semantic-blue/40 bg-white shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-semantic-blue">
+                          ลูกค้าแนบสลิปโอนเงินแล้ว
+                        </div>
+                        <div className="text-[11px] text-ink-secondary font-mono-num">
+                          ยอดสุทธิ ฿{(order.total ?? 0).toLocaleString()} · แตะเพื่อดูรูปใหญ่
+                        </div>
+                      </div>
                     </div>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-surface-border-light space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[11px] text-ink-muted font-mono-num">
+                      รวม ฿{(order.subtotal ?? 0).toLocaleString()} · ค่าส่ง ฿{(order.shippingFee ?? 0).toLocaleString()}
+                    </div>
+                    <div className="font-semibold text-ink font-mono-num text-sm">
+                      สุทธิ ฿{(order.total ?? 0).toLocaleString()}
+                    </div>
+                  </div>
+
+                  {order.status === 'PENDING' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        disabled={updatingStatus}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUpdateStatus(order.id, 'CONFIRMED');
+                        }}
+                        className="w-full bg-semantic-green hover:opacity-90 border-transparent"
+                      >
+                        <span>✅ ยืนยันออเดอร์</span>
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        disabled={updatingStatus}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUpdateStatus(order.id, 'CANCELLED');
+                        }}
+                        className="w-full"
+                      >
+                        <span>❌ ปฏิเสธออเดอร์</span>
+                      </Button>
+                    </div>
+                  )}
+
+                  {order.status === 'SLIP_UPLOADED' && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={updatingStatus}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleUpdateStatus(order.id, 'PREPARING');
+                      }}
+                      className="w-full"
+                    >
+                      <FontAwesomeIcon icon={faKitchenSet} className="w-3.5 h-3.5" />
+                      <span>ตรวจสลิปแล้ว · กำลังเตรียมสินค้า</span>
+                    </Button>
+                  )}
+
+                  <div className="flex items-center justify-between gap-2">
                     <div className="text-[10px] text-ink-muted font-mono-num">
                       {new Date(order.createdAt || Date.now()).toLocaleString('th-TH', {
                         dateStyle: 'short',
                         timeStyle: 'short',
                       })}
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setViewingReceiptOrder(order);
-                      }}
-                    >
-                      <FontAwesomeIcon icon={faReceipt} className="w-3 h-3" />
-                      <span>ใบเสร็จ</span>
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedOrder(order);
-                      }}
-                    >
-                      <FontAwesomeIcon icon={faEye} className="w-3 h-3" />
-                      <span>จัดการ</span>
-                    </Button>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setViewingReceiptOrder(order);
+                        }}
+                      >
+                        <FontAwesomeIcon icon={faReceipt} className="w-3 h-3" />
+                        <span>ใบเสร็จ</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedOrder(order);
+                        }}
+                      >
+                        <FontAwesomeIcon icon={faEye} className="w-3 h-3" />
+                        <span>รายละเอียด</span>
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </Card>
             );
           })
         ) : (
-          <Card className="p-8 text-center text-ink-muted text-xs">
+          <Card className="md:col-span-2 p-8 text-center text-ink-muted text-xs">
             {loading ? 'กำลังโหลดรายการออเดอร์...' : 'ไม่พบคำสั่งซื้อตามเงื่อนไขที่เลือก'}
           </Card>
         )}
@@ -568,6 +762,7 @@ function OrdersContent() {
           loadingMessage="กำลังโหลดรายการออเดอร์..."
           emptyMessage="ไม่พบคำสั่งซื้อตามเงื่อนไขที่เลือก"
           defaultPageSize={10}
+          minWidthClass="min-w-0"
         />
       </div>
 
@@ -608,8 +803,8 @@ function OrdersContent() {
               className="no-print"
             >
               <FontAwesomeIcon icon={faReceipt} className="w-3 h-3 text-primary-text" />
-              <span className="hidden sm:inline">ใบเสร็จรับเงิน 80mm</span>
-              <span className="sm:hidden">80mm</span>
+              <span className="hidden sm:inline">ใบเสร็จรับเงิน</span>
+              <span className="sm:hidden">ใบเสร็จ</span>
             </Button>
           ) : undefined
         }
@@ -623,7 +818,7 @@ function OrdersContent() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap justify-end">
                 <Button
                   variant="secondary"
                   size="sm"
@@ -636,15 +831,25 @@ function OrdersContent() {
                 </Button>
 
                 {selectedOrder.status === 'PENDING' && (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    disabled={updatingStatus}
-                    onClick={() => handleUpdateStatus(selectedOrder.id, 'CONFIRMED')}
-                  >
-                    <FontAwesomeIcon icon={faCircleCheck} className="w-3.5 h-3.5" />
-                    <span>ยืนยันออเดอร์</span>
-                  </Button>
+                  <>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={updatingStatus}
+                      onClick={() => handleUpdateStatus(selectedOrder.id, 'CANCELLED')}
+                    >
+                      <span>ปฏิเสธออเดอร์</span>
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={updatingStatus}
+                      onClick={() => handleUpdateStatus(selectedOrder.id, 'CONFIRMED')}
+                      className="bg-semantic-green hover:opacity-90 border-transparent"
+                    >
+                      <span>ยืนยันออเดอร์</span>
+                    </Button>
+                  </>
                 )}
                 {selectedOrder.status === 'CONFIRMED' && (
                   <Button
@@ -655,8 +860,19 @@ function OrdersContent() {
                   >
                     <FontAwesomeIcon icon={faKitchenSet} className="w-3.5 h-3.5" />
                     <span>
-                      {selectedOrder.slipUrl ? 'ตรวจสลิปแล้ว · เริ่มเตรียม' : 'เริ่มเตรียมสินค้า'}
+                      {selectedOrder.slipUrl ? 'ตรวจสลิปแล้ว · กำลังเตรียมสินค้า' : 'กำลังเตรียมสินค้า'}
                     </span>
+                  </Button>
+                )}
+                {selectedOrder.status === 'SLIP_UPLOADED' && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={updatingStatus}
+                    onClick={() => handleUpdateStatus(selectedOrder.id, 'PREPARING')}
+                  >
+                    <FontAwesomeIcon icon={faKitchenSet} className="w-3.5 h-3.5" />
+                    <span>กำลังเตรียมสินค้า</span>
                   </Button>
                 )}
                 {selectedOrder.status === 'PREPARING' && (
@@ -704,11 +920,67 @@ function OrdersContent() {
       >
         {selectedOrder && (
           <div className="space-y-4 text-xs">
+            {/* Highlight Slip Verification Banner for SLIP_UPLOADED Orders */}
+            {selectedOrder.status === 'SLIP_UPLOADED' && (
+              <div className="p-3.5 rounded bg-semantic-blue-lt border border-semantic-blue/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  {selectedOrder.slipUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => setViewingSlipUrl(selectedOrder.slipUrl!)}
+                      className="w-14 h-14 rounded overflow-hidden border-2 border-semantic-blue/50 bg-white shrink-0 hover:opacity-90 transition-opacity"
+                      title="คลิกเพื่อดูสลิปขนาดเต็ม"
+                    >
+                      <img
+                        src={selectedOrder.slipUrl}
+                        alt="Uploaded Slip Preview"
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ) : (
+                    <div className="w-12 h-12 rounded bg-white/80 border border-semantic-blue/30 flex items-center justify-center text-semantic-blue shrink-0">
+                      <FontAwesomeIcon icon={faReceipt} className="w-5 h-5" />
+                    </div>
+                  )}
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="font-semibold text-semantic-blue text-[13px]">
+                      🔵 ลูกค้าชำระเงินแล้ว / รอตรวจสอบสลิป
+                    </div>
+                    <p className="text-[11px] text-ink-secondary font-mono-num">
+                      ยอดโอนที่ต้องตรวจ: ฿{(selectedOrder.total ?? 0).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {selectedOrder.slipUrl && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setViewingSlipUrl(selectedOrder.slipUrl!)}
+                      className="bg-surface border-semantic-blue/40 text-semantic-blue"
+                    >
+                      <FontAwesomeIcon icon={faEye} className="w-3.5 h-3.5" />
+                      <span>ดูสลิปเต็ม</span>
+                    </Button>
+                  )}
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={updatingStatus}
+                    onClick={() => handleUpdateStatus(selectedOrder.id, 'PREPARING')}
+                  >
+                    <FontAwesomeIcon icon={faKitchenSet} className="w-3.5 h-3.5" />
+                    <span>กำลังเตรียมสินค้า</span>
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Pipeline & Status Switcher */}
             <div className="p-3.5 rounded bg-surface-secondary border border-surface-border-light space-y-3">
               {selectedOrder.status === 'CANCELLED' ? (
                 <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded bg-semantic-red-lt border border-semantic-red/25 text-semantic-red">
-                  <span className="font-semibold">ออเดอร์นี้ถูกยกเลิกแล้ว</span>
+                  <span className="font-semibold">🔴 ปฏิเสธออเดอร์ / ยกเลิกแล้ว</span>
                   <span className="text-[11px]">
                     สามารถเปลี่ยนสถานะเพื่อนำกลับมาดำเนินการต่อได้
                   </span>
@@ -720,55 +992,64 @@ function OrdersContent() {
                       ขั้นตอนคำสั่งซื้อ
                     </span>
                     <span className="text-ink font-semibold">
-                      {selectedOrder.status === 'PENDING' && '1/5: รอยืนยันจากร้าน'}
-                      {selectedOrder.status === 'CONFIRMED' && '2/5: ยืนยันแล้ว / รอชำระเงิน'}
-                      {selectedOrder.status === 'PREPARING' && '3/5: กำลังจัดเตรียมสินค้า'}
-                      {selectedOrder.status === 'SHIPPING' && '4/5: กำลังนำส่งพัสดุ'}
-                      {selectedOrder.status === 'COMPLETED' && '5/5: สำเร็จเรียบร้อย'}
+                      {selectedOrder.status === 'PENDING' && '1/6: รอร้านยืนยัน'}
+                      {selectedOrder.status === 'CONFIRMED' && '2/6: ร้านยืนยันแล้ว / รอชำระเงิน'}
+                      {selectedOrder.status === 'SLIP_UPLOADED' && '3/6: ชำระเงินแล้ว / รอตรวจสอบ'}
+                      {selectedOrder.status === 'PREPARING' && '4/6: กำลังเตรียมสินค้า'}
+                      {selectedOrder.status === 'SHIPPING' && '5/6: กำลังจัดส่ง'}
+                      {selectedOrder.status === 'COMPLETED' && '6/6: เสร็จสิ้น'}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-5 gap-2">
-                    {(['PENDING', 'CONFIRMED', 'PREPARING', 'SHIPPING', 'COMPLETED'] as const).map(
-                      (stepKey, idx) => {
-                        const stepOrder = [
-                          'PENDING',
-                          'CONFIRMED',
-                          'PREPARING',
-                          'SHIPPING',
-                          'COMPLETED',
-                        ];
-                        const currentIdx = stepOrder.indexOf(selectedOrder.status);
-                        const isPastOrCurrent = currentIdx >= idx;
-                        const isCurrent = currentIdx === idx;
-                        const labels = ['รอยืนยัน', 'ยืนยัน', 'เตรียม', 'จัดส่ง', 'สำเร็จ'];
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    {(
+                      [
+                        'PENDING',
+                        'CONFIRMED',
+                        'SLIP_UPLOADED',
+                        'PREPARING',
+                        'SHIPPING',
+                        'COMPLETED',
+                      ] as const
+                    ).map((stepKey, idx) => {
+                      const stepOrder = [
+                        'PENDING',
+                        'CONFIRMED',
+                        'SLIP_UPLOADED',
+                        'PREPARING',
+                        'SHIPPING',
+                        'COMPLETED',
+                      ];
+                      const currentIdx = stepOrder.indexOf(selectedOrder.status);
+                      const isPastOrCurrent = currentIdx >= idx;
+                      const isCurrent = currentIdx === idx;
+                      const labels = ['รอยืนยัน', 'รอชำระ', 'ตรวจสลิป', 'เตรียม', 'จัดส่ง', 'เสร็จสิ้น'];
 
-                        return (
-                          <div key={stepKey} className="flex flex-col gap-1 min-w-0">
-                            <div
-                              className={`h-1.5 rounded-full transition-colors ${
-                                isCurrent
-                                  ? 'bg-primary'
-                                  : isPastOrCurrent
-                                  ? 'bg-semantic-green'
-                                  : 'bg-surface-border'
-                              }`}
-                            />
-                            <div
-                              className={`text-[10px] text-center truncate ${
-                                isCurrent
-                                  ? 'font-semibold text-ink'
-                                  : isPastOrCurrent
-                                  ? 'text-ink-secondary font-medium'
-                                  : 'text-ink-muted'
-                              }`}
-                            >
-                              {labels[idx]}
-                            </div>
+                      return (
+                        <div key={stepKey} className="flex flex-col gap-1 min-w-0">
+                          <div
+                            className={`h-1.5 rounded-full transition-colors ${
+                              isCurrent
+                                ? 'bg-primary'
+                                : isPastOrCurrent
+                                ? 'bg-semantic-green'
+                                : 'bg-surface-border'
+                            }`}
+                          />
+                          <div
+                            className={`text-[10px] text-center truncate ${
+                              isCurrent
+                                ? 'font-semibold text-ink'
+                                : isPastOrCurrent
+                                ? 'text-ink-secondary font-medium'
+                                : 'text-ink-muted'
+                            }`}
+                          >
+                            {labels[idx]}
                           </div>
-                        );
-                      }
-                    )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -904,14 +1185,14 @@ function OrdersContent() {
                   <tbody className="divide-y divide-surface-border-light">
                     {selectedOrder.items.map((item) => (
                       <tr key={item.id}>
-                        <td className="px-3 py-2 font-medium text-ink">{item.productName}</td>
-                        <td className="px-3 py-2 text-right font-mono-num text-ink-muted">
+                        <td className="px-2.5 sm:px-3 py-2 font-medium text-ink">{item.productName}</td>
+                        <td className="px-2 sm:px-3 py-2 text-right font-mono-num text-ink-muted whitespace-nowrap">
                           ฿{item.price}
                         </td>
-                        <td className="px-3 py-2 text-center font-mono-num font-semibold text-ink">
+                        <td className="px-2 sm:px-3 py-2 text-center font-mono-num font-semibold text-ink">
                           {item.quantity}
                         </td>
-                        <td className="px-3 py-2 text-right font-mono-num font-semibold text-ink">
+                        <td className="px-2.5 sm:px-3 py-2 text-right font-mono-num font-semibold text-ink whitespace-nowrap">
                           ฿{item.subtotal.toLocaleString()}
                         </td>
                       </tr>
@@ -934,11 +1215,7 @@ function OrdersContent() {
                       icon={selectedOrder.paymentMethod === 'COD' ? faTruck : faQrcode}
                       className="w-2.5 h-2.5"
                     />
-                    <span>
-                      {selectedOrder.paymentMethod === 'COD'
-                        ? 'เก็บเงินปลายทาง (COD)'
-                        : 'โอนเงิน / QR PromptPay'}
-                    </span>
+                    <span>{getPaymentMethodLabel(selectedOrder.paymentMethod)}</span>
                   </Badge>
                 </div>
 
@@ -1063,9 +1340,30 @@ function OrdersContent() {
           ) : undefined
         }
         footer={
-          <Button variant="secondary" size="sm" onClick={() => setViewingSlipUrl(null)}>
-            ปิด
-          </Button>
+          <div className="flex items-center justify-end gap-2">
+            {viewingSlipUrl && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await downloadImageAsJpeg(
+                      viewingSlipUrl,
+                      `slip-${selectedOrder?.orderNumber || 'payment'}.jpg`
+                    );
+                  } catch (err: any) {
+                    showToast({ title: err?.message || 'ดาวน์โหลดไม่สำเร็จ', variant: 'error' });
+                  }
+                }}
+              >
+                <FontAwesomeIcon icon={faDownload} className="w-3.5 h-3.5 mr-1.5" />
+                ดาวน์โหลด JPEG
+              </Button>
+            )}
+            <Button variant="secondary" size="sm" onClick={() => setViewingSlipUrl(null)}>
+              ปิด
+            </Button>
+          </div>
         }
       >
         <div className="flex items-center justify-center bg-surface-secondary rounded p-3 border border-surface-border-light min-h-[160px]">

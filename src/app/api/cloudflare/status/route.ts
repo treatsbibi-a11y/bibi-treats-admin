@@ -1,6 +1,7 @@
 export const runtime = 'edge';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { resolveD1Binding } from '@/lib/d1-remote';
 import { r2Client } from '@/lib/r2';
 import { HeadBucketCommand } from '@aws-sdk/client-s3';
 
@@ -24,11 +25,16 @@ export async function GET() {
     error: null as string | null,
   };
 
-  // 1. Verify Cloudflare D1 Connection via Prisma / D1
+  // 1. Verify Cloudflare D1 Connection via D1 Binding / Prisma
   const startTime = Date.now();
   try {
-    const count = await prisma.product.count();
-    d1Info.productsCount = count;
+    const d1 = resolveD1Binding();
+    if (d1) {
+      const row = await d1.prepare('SELECT COUNT(*) as cnt FROM Product').first<{ cnt: number }>();
+      d1Info.productsCount = Number(row?.cnt || 0);
+    } else {
+      d1Info.productsCount = await prisma.product.count();
+    }
     d1Info.status = 'ONLINE';
     d1Info.latencyMs = Date.now() - startTime;
   } catch (err: any) {

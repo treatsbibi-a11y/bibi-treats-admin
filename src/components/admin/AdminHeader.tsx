@@ -17,6 +17,7 @@ import {
   faBagShopping,
 } from '@fortawesome/free-solid-svg-icons';
 import { getBreadcrumbs } from '@/lib/admin-nav';
+import { getStorefrontUrl } from '@/lib/utils';
 import { useTheme } from '@/components/theme/ThemeProvider';
 import { DropdownMenu } from '@/components/ui/DropdownMenu';
 import { OrderDetail, StoreSettingsData } from '@/types';
@@ -113,19 +114,16 @@ export default function AdminHeader({
 
       {/* Right: Command Palette, Store Toggle, Theme Toggle, Bell Menu, Profile Menu */}
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-        {/* Command Palette Trigger */}
+        {/* Quick Search Trigger */}
         <button
           type="button"
           onClick={onOpenCommandPalette}
-          className="inline-flex items-center gap-2 px-2.5 py-1.5 h-8 rounded border border-surface-border bg-surface-secondary hover:border-ink-muted text-ink-muted hover:text-ink text-xs transition-colors"
-          title="ค้นหาด่วน (⌘K / Ctrl+K)"
-          aria-label="เปิด Command Palette"
+          className="inline-flex items-center gap-2 px-2.5 sm:px-3 h-8 sm:w-44 md:w-56 rounded-md border border-surface-border bg-surface-secondary/80 hover:bg-surface-secondary hover:border-ink-muted/60 text-ink-muted hover:text-ink text-xs transition-colors"
+          title="ค้นหาด่วน"
+          aria-label="ค้นหาด่วน"
         >
-          <FontAwesomeIcon icon={faMagnifyingGlass} className="w-3.5 h-3.5" />
-          <span className="hidden md:inline text-xs">ค้นหาด่วน...</span>
-          <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-surface border border-surface-border rounded-sm text-ink-muted leading-none">
-            ⌘K
-          </kbd>
+          <FontAwesomeIcon icon={faMagnifyingGlass} className="w-3.5 h-3.5 shrink-0" />
+          <span className="hidden sm:inline truncate">ค้นหาด่วน...</span>
         </button>
 
         {/* Store Active Toggle */}
@@ -285,8 +283,8 @@ export default function AdminHeader({
               <FontAwesomeIcon icon={faGear} className="w-3.5 h-3.5 text-ink-muted" />
               <span>ตั้งค่าร้านค้า</span>
             </Link>
-            <Link
-              href={process.env.NEXT_PUBLIC_STOREFRONT_URL || 'http://localhost:3002'}
+            <a
+              href={getStorefrontUrl()}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setProfileOpen(false)}
@@ -297,7 +295,7 @@ export default function AdminHeader({
                 className="w-3.5 h-3.5 text-ink-muted"
               />
               <span>ดูหน้าร้านออนไลน์</span>
-            </Link>
+            </a>
           </div>
 
           <div className="py-1 border-t border-surface-border-light">

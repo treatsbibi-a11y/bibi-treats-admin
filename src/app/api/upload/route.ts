@@ -1,6 +1,6 @@
 export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
-import { uploadFileToR2 } from '@/lib/r2';
+import { uploadR2Object } from '@/lib/d1-remote';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,15 +43,42 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const finalExt = rawExt === 'jpeg' ? 'jpg' : rawExt || (mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg');
-    const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    const filename = `bibi-${uniqueId}.${finalExt}`;
-
     const bytes = await file.arrayBuffer();
     const uint8 = new Uint8Array(bytes);
 
-    // Upload directly to Cloudflare R2 bucket
-    await uploadFileToR2(`uploads/${filename}`, uint8, file.type || `image/${finalExt}`);
+    // Magic-byte verification to prevent MIME/extension spoofing
+    const isJpeg = uint8.length >= 3 && uint8[0] === 0xff && uint8[1] === 0xd8 && uint8[2] === 0xff;
+    const isPng =
+      uint8.length >= 8 &&
+      uint8[0] === 0x89 &&
+      uint8[1] === 0x50 &&
+      uint8[2] === 0x4e &&
+      uint8[3] === 0x47;
+    const isWebp =
+      uint8.length >= 12 &&
+      uint8[0] === 0x52 &&
+      uint8[1] === 0x49 &&
+      uint8[2] === 0x46 &&
+      uint8[3] === 0x46 &&
+      uint8[8] === 0x57 &&
+      uint8[9] === 0x45 &&
+      uint8[10] === 0x42 &&
+      uint8[11] === 0x50;
+
+    if (!isJpeg && !isPng && !isWebp) {
+      return NextResponse.json(
+        { error: 'ไฟล์ไม่ใช่รูปภาพ JPG, PNG หรือ WEBP ที่ถูกต้อง' },
+        { status: 400 }
+      );
+    }
+
+    const detectedExt = isPng ? 'png' : isWebp ? 'webp' : 'jpg';
+    const detectedMime = isPng ? 'image/png' : isWebp ? 'image/webp' : 'image/jpeg';
+    const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const filename = `bibi-${uniqueId}.${detectedExt}`;
+
+    // Upload directly to Cloudflare R2 bucket (native binding on Pages, REST/S3 locally)
+    await uploadR2Object(`uploads/${filename}`, uint8, detectedMime);
 
     const relativeUrl = `/uploads/${filename}`;
 
@@ -60,7 +87,7 @@ export async function POST(req: NextRequest) {
       url: relativeUrl,
       filename,
       size: file.size,
-      mimeType: file.type || `image/${finalExt}`,
+      mimeType: detectedMime,
     });
   } catch (error: any) {
     console.error('Upload error:', error);

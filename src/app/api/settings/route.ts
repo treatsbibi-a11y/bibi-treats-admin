@@ -2,22 +2,33 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getD1StoreSettings } from '@/lib/d1';
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { resolveD1Binding } from '@/lib/d1-remote';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
-    let d1Binding: any = null;
-    try {
-      d1Binding = (getRequestContext()?.env as any)?.DB;
-    } catch {}
+    const d1Binding = resolveD1Binding();
 
     if (d1Binding) {
       const d1Settings = await getD1StoreSettings(d1Binding);
       if (d1Settings) {
         return NextResponse.json(d1Settings);
       }
+      return NextResponse.json({
+        shopName: "Bibi's Treats",
+        tagline: 'Sweet treats, happy hearts',
+        logoUrl: '/uploads/bibi-1795498989551-27zh7uk.png',
+        qrImageUrl: '/images/thai-qr-payment.jpg',
+        promptpayNumber: '086-296-5765',
+        promptpayName: 'น.ส. ฮาบีบี บุตรแหล่',
+        bankName: 'ธนาคารกสิกรไทย (Kasikorn Bank)',
+        bankAccountNo: '142-1-52907-4',
+        bankAccountName: 'น.ส. ฮาบีบี บุตรแหล่',
+        defaultShippingFee: 40,
+        isStoreOpen: true,
+        announcement: 'อบสดใหม่ทุกวัน ส่งตรงถึงบ้านคุณด้วยความพิถีพิถัน',
+      });
     }
 
     let settings = await prisma.storeSettings.findFirst();
@@ -28,7 +39,7 @@ export async function GET(req: NextRequest) {
         shopName: "Bibi's Treats",
         tagline: 'Sweet treats, happy hearts',
         logoUrl: '/uploads/bibi-1795498989551-27zh7uk.png',
-        qrImageUrl: '/uploads/bibi-1795444192478-qiwqv1g.jpg',
+        qrImageUrl: '/images/thai-qr-payment.jpg',
         promptpayNumber: '086-296-5765',
         promptpayName: 'น.ส. ฮาบีบี บุตรแหล่',
         bankName: 'ธนาคารกสิกรไทย (Kasikorn Bank)',

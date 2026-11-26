@@ -1,4 +1,13 @@
-import { ProductWithImages, OrderDetail, StoreSettingsData, OrderStatus, PaymentMethod } from '@/types';
+import {
+  ProductWithImages,
+  OrderDetail,
+  StoreSettingsData,
+  OrderStatus,
+  PaymentMethod,
+  ReviewItem,
+  ReviewStats,
+  ReviewStatus,
+} from '@/types';
 import { prisma } from './prisma';
 
 /**
@@ -212,15 +221,18 @@ export async function getD1Products(options?: {
 export async function getD1Orders(options?: {
   status?: string;
   search?: string;
+  startDate?: string;
+  endDate?: string;
   d1Binding?: CloudflareD1Binding;
-}): Promise<any[]> {
+}): Promise<OrderDetail[]> {
   if (options?.d1Binding) {
     let sql = `
       SELECT 
         o.id, o.orderNumber, o.customerId, o.status, o.paymentMethod,
         o.slipUrl, o.subtotal, o.shippingFee, o.total, o.note,
         o.createdAt, o.updatedAt,
-        c.name as customer_name, c.phone as customer_phone, c.instagram as customer_instagram, c.address as customer_address
+        c.id as customer_id, c.name as customer_name, c.phone as customer_phone,
+        c.instagram as customer_instagram, c.address as customer_address
       FROM [Order] o
       LEFT JOIN Customer c ON o.customerId = c.id
       WHERE 1=1
@@ -238,45 +250,61 @@ export async function getD1Orders(options?: {
       params.push(q, q, q);
     }
 
+    if (options.startDate) {
+      sql += ` AND date(o.createdAt) >= date(?)`;
+      params.push(options.startDate);
+    }
+
+    if (options.endDate) {
+      sql += ` AND date(o.createdAt) <= date(?)`;
+      params.push(options.endDate);
+    }
+
     sql += ` ORDER BY o.createdAt DESC`;
 
     const stmt = options.d1Binding.prepare(sql).bind(...params);
     const { results } = await stmt.all<any>();
 
-    // Fetch items for each order
-    const orderIds = results.map(r => r.id);
-    let itemsMap: Record<string, any[]> = {};
+    if (!results || results.length === 0) {
+      return [];
+    }
 
-    if (orderIds.length > 0) {
-      try {
-        const itemsStmt = options.d1Binding.prepare(`
+    const orderIds = results.map((r: any) => r.id);
+    const itemsMap: Record<string, OrderDetail['items']> = {};
+
+    try {
+      const placeholders = orderIds.map(() => '?').join(',');
+      const itemsStmt = options.d1Binding
+        .prepare(`
           SELECT oi.id, oi.orderId, oi.productId, oi.productName, oi.quantity, oi.price, oi.subtotal,
-                 p.name as p_name, pi.imageUrl as p_image
+                 p.name as p_name, pi.imageUrl as p_image, pi.isPrimary as p_is_primary
           FROM OrderItem oi
           LEFT JOIN Product p ON oi.productId = p.id
           LEFT JOIN ProductImage pi ON p.id = pi.productId AND pi.isPrimary = 1
-        `).bind();
-        const itemsRes = await itemsStmt.all<any>();
-        for (const item of itemsRes.results) {
-          if (!itemsMap[item.orderId]) itemsMap[item.orderId] = [];
-          itemsMap[item.orderId].push({
-            id: item.id,
-            orderId: item.orderId,
-            productId: item.productId,
-            productName: item.productName || item.p_name,
-            quantity: Number(item.quantity),
-            price: Number(item.price),
-            subtotal: Number(item.subtotal),
-            product: {
-              id: item.productId,
-              name: item.productName || item.p_name,
-              images: item.p_image ? [{ imageUrl: item.p_image, isPrimary: true }] : []
-            }
-          });
-        }
-      } catch (err) {
-        console.warn('Error fetching order items from D1:', err);
+          WHERE oi.orderId IN (${placeholders})
+        `)
+        .bind(...orderIds);
+      const itemsRes = await itemsStmt.all<any>();
+      for (const item of itemsRes.results || []) {
+        if (!itemsMap[item.orderId]) itemsMap[item.orderId] = [];
+        itemsMap[item.orderId].push({
+          id: item.id,
+          productId: item.productId || '',
+          productName: item.productName || item.p_name || '',
+          quantity: Number(item.quantity),
+          price: Number(item.price),
+          subtotal: Number(item.subtotal),
+          product: item.productId
+            ? {
+                images: item.p_image
+                  ? [{ imageUrl: item.p_image, isPrimary: Boolean(item.p_is_primary ?? true) }]
+                  : [],
+              }
+            : null,
+        });
       }
+    } catch (err) {
+      console.warn('Error fetching order items from D1:', err);
     }
 
     const safeIso = (d: any) => {
@@ -285,36 +313,113 @@ export async function getD1Orders(options?: {
       return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
     };
 
-    return results.map(row => ({
+    return results.map((row: any) => ({
       id: row.id,
       orderNumber: row.orderNumber,
       customerId: row.customerId,
-      status: row.status,
-      paymentStatus: row.status === 'CANCELLED' ? 'FAILED' : 'PAID',
-      paymentMethod: row.paymentMethod,
-      slipUrl: row.slipUrl,
-      paymentProof: row.slipUrl,
       subtotal: Number(row.subtotal || 0),
       shippingFee: Number(row.shippingFee || 0),
-      discount: 0,
       total: Number(row.total || 0),
+      status: row.status as OrderStatus,
+      paymentMethod: row.paymentMethod as PaymentMethod,
+      slipUrl: row.slipUrl,
       note: row.note,
-      trackingNumber: null,
-      shippingCarrier: null,
       createdAt: safeIso(row.createdAt),
-      updatedAt: safeIso(row.updatedAt),
       customer: {
-        id: row.customerId,
+        id: row.customer_id || row.customerId,
         name: row.customer_name || 'ลูกค้าทั่วไป',
         phone: row.customer_phone || '-',
         instagram: row.customer_instagram || null,
-        address: row.customer_address || '-'
+        address: row.customer_address || '-',
       },
-      items: itemsMap[row.id] || []
+      items: itemsMap[row.id] || [],
     }));
   }
 
-  return [];
+  // Fallback / Standard Node Runtime via Prisma:
+  const where: any = {};
+  if (options?.status && options.status !== 'ALL' && options.status !== 'all') {
+    where.status = options.status;
+  }
+
+  if (options?.search && options.search.trim()) {
+    const q = options.search.trim();
+    where.OR = [
+      { orderNumber: { contains: q } },
+      { customer: { name: { contains: q } } },
+      { customer: { phone: { contains: q } } },
+    ];
+  }
+
+  if (options?.startDate || options?.endDate) {
+    where.createdAt = {};
+    if (options.startDate) {
+      where.createdAt.gte = new Date(options.startDate);
+    }
+    if (options.endDate) {
+      const end = new Date(options.endDate);
+      end.setHours(23, 59, 59, 999);
+      where.createdAt.lte = end;
+    }
+  }
+
+  const orders = await prisma.order.findMany({
+    where,
+    include: {
+      customer: true,
+      items: {
+        include: {
+          product: {
+            include: {
+              images: {
+                orderBy: { displayOrder: 'asc' },
+              },
+            },
+          },
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+
+  return orders.map((o) => ({
+    id: o.id,
+    orderNumber: o.orderNumber,
+    customerId: o.customerId,
+    subtotal: o.subtotal,
+    shippingFee: o.shippingFee,
+    total: o.total,
+    status: o.status as OrderStatus,
+    paymentMethod: o.paymentMethod as PaymentMethod,
+    slipUrl: o.slipUrl,
+    note: o.note,
+    createdAt: o.createdAt.toISOString(),
+    customer: {
+      id: o.customer.id,
+      name: o.customer.name,
+      phone: o.customer.phone,
+      instagram: o.customer.instagram,
+      address: o.customer.address,
+    },
+    items: o.items.map((item) => ({
+      id: item.id,
+      productId: item.productId ?? '',
+      productName: item.productName,
+      quantity: item.quantity,
+      price: item.price,
+      subtotal: item.subtotal,
+      product: item.product
+        ? {
+            images: item.product.images.map((img) => ({
+              imageUrl: img.imageUrl,
+              isPrimary: img.isPrimary,
+            })),
+          }
+        : null,
+    })),
+  }));
 }
 
 export async function getD1OrderDetail(
@@ -519,4 +624,130 @@ export async function getD1StoreSettings(d1Binding?: CloudflareD1Binding): Promi
     isStoreOpen: settings.isStoreOpen,
     announcement: settings.announcement,
   };
+}
+
+// ----------------------------------------------------------------------
+// REVIEWS (Shared shape with User storefront: productId, productName, images)
+// ----------------------------------------------------------------------
+
+function parseReviewImages(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.filter((u): u is string => typeof u === 'string' && u.trim().length > 0);
+  }
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((u): u is string => typeof u === 'string' && u.trim().length > 0);
+      }
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+export function computeReviewStats(visibleReviews: ReviewItem[]): ReviewStats {
+  const totalCount = visibleReviews.length;
+  const counts: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  let sum = 0;
+
+  for (const r of visibleReviews) {
+    const rating = Math.min(5, Math.max(1, Math.round(Number(r.rating) || 5)));
+    counts[rating] = (counts[rating] || 0) + 1;
+    sum += rating;
+  }
+
+  const averageRating = totalCount > 0 ? Math.round((sum / totalCount) * 100) / 100 : 0;
+  const stars: (5 | 4 | 3 | 2 | 1)[] = [5, 4, 3, 2, 1];
+  const breakdown = stars.map((star) => ({
+    star,
+    count: counts[star] || 0,
+    percentage: totalCount > 0 ? Math.round(((counts[star] || 0) / totalCount) * 100) : 0,
+  }));
+
+  return { averageRating, totalCount, breakdown };
+}
+
+export async function ensureReviewProductColumns(d1Binding: CloudflareD1Binding) {
+  try {
+    await d1Binding.prepare(`ALTER TABLE Review ADD COLUMN productId TEXT`).bind().run();
+  } catch {
+    // Column already exists
+  }
+  try {
+    await d1Binding.prepare(`ALTER TABLE Review ADD COLUMN productName TEXT`).bind().run();
+  } catch {
+    // Column already exists
+  }
+}
+
+export async function getD1Reviews(options?: {
+  rating?: number;
+  hasImages?: boolean;
+  sort?: 'latest' | 'highest' | 'lowest';
+  includeHidden?: boolean;
+  d1Binding?: CloudflareD1Binding;
+}): Promise<{ reviews: ReviewItem[]; stats: ReviewStats }> {
+  let allRows: ReviewItem[] = [];
+
+  if (options?.d1Binding) {
+    await ensureReviewProductColumns(options.d1Binding);
+    const sql = options.includeHidden
+      ? `SELECT id, customerName, rating, comment, images, productId, productName, status, createdAt, updatedAt FROM Review ORDER BY datetime(createdAt) DESC`
+      : `SELECT id, customerName, rating, comment, images, productId, productName, status, createdAt, updatedAt FROM Review WHERE status = 'VISIBLE' ORDER BY datetime(createdAt) DESC`;
+
+    const { results } = await options.d1Binding.prepare(sql).bind().all<any>();
+    allRows = (results || []).map((row: any) => ({
+      id: row.id,
+      customerName: row.customerName,
+      rating: Number(row.rating),
+      comment: row.comment,
+      images: parseReviewImages(row.images),
+      productId: row.productId ?? null,
+      productName: row.productName ?? null,
+      status: (row.status === 'HIDDEN' ? 'HIDDEN' : 'VISIBLE') as ReviewStatus,
+      createdAt: new Date(row.createdAt).toISOString(),
+      updatedAt: new Date(row.updatedAt).toISOString(),
+    }));
+  } else {
+    const rows = await prisma.review.findMany({
+      where: options?.includeHidden ? undefined : { status: 'VISIBLE' },
+      orderBy: { createdAt: 'desc' },
+    });
+    allRows = rows.map((row) => ({
+      id: row.id,
+      customerName: row.customerName,
+      rating: row.rating,
+      comment: row.comment,
+      images: parseReviewImages(row.images),
+      productId: row.productId ?? null,
+      productName: row.productName ?? null,
+      status: (row.status === 'HIDDEN' ? 'HIDDEN' : 'VISIBLE') as ReviewStatus,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    }));
+  }
+
+  const visibleReviews = allRows.filter((r) => r.status === 'VISIBLE');
+  const stats = computeReviewStats(visibleReviews);
+
+  let filtered = [...allRows];
+  if (options?.rating && options.rating >= 1 && options.rating <= 5) {
+    filtered = filtered.filter((r) => r.rating === options.rating);
+  }
+  if (options?.hasImages) {
+    filtered = filtered.filter((r) => r.images.length > 0);
+  }
+
+  const sort = options?.sort || 'latest';
+  if (sort === 'highest') {
+    filtered.sort((a, b) => b.rating - a.rating || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  } else if (sort === 'lowest') {
+    filtered.sort((a, b) => a.rating - b.rating || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  } else {
+    filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  return { reviews: filtered, stats };
 }

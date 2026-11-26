@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
 import { showToast } from '@/components/ui/Toast';
+import { useSmartPolling } from '@/hooks/useSmartPolling';
 import { ProductWithImages } from '@/types';
 
 type StockStatus = 'READY' | 'LOW' | 'OUT' | 'INACTIVE';
@@ -33,25 +34,28 @@ export default function AdminStockPage() {
   const [restockAmount, setRestockAmount] = useState(10);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  const fetchProducts = async () => {
-    setLoading(true);
+  const fetchProducts = async (silentOrEvent?: boolean | unknown) => {
+    const silent = silentOrEvent === true;
+    if (!silent) setLoading(true);
     try {
-      const res = await fetch('/api/products?all=true');
+      const res = await fetch('/api/products?all=true', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setProducts(data);
       }
     } catch (err) {
       console.error('Failed to load stock products', err);
-      showToast({ title: 'โหลดรายการสต็อกไม่สำเร็จ', variant: 'error' });
+      if (!silent) showToast({ title: 'โหลดรายการสต็อกไม่สำเร็จ', variant: 'error' });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchProducts();
+    fetchProducts(false);
   }, []);
+
+  useSmartPolling(() => fetchProducts(true), 5000);
 
   const getStockStatus = (p: ProductWithImages): StockStatus => {
     if (p.status === 'INACTIVE') return 'INACTIVE';
@@ -156,7 +160,7 @@ export default function AdminStockPage() {
         const primaryImage =
           product.images?.find((img) => img.isPrimary) || product.images?.[0];
         return (
-          <div className="flex items-center gap-2.5 min-w-[180px]">
+          <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-10 h-10 rounded overflow-hidden bg-surface-secondary border border-surface-border shrink-0 flex items-center justify-center">
               {primaryImage ? (
                 <img
@@ -168,7 +172,14 @@ export default function AdminStockPage() {
                 <FontAwesomeIcon icon={faCakeCandles} className="w-4 h-4 text-ink-disabled" />
               )}
             </div>
-            <span className="font-semibold text-ink text-[13px]">{product.name}</span>
+            <div className="min-w-0">
+              <span className="font-semibold text-ink text-[13px] line-clamp-2">
+                {product.name}
+              </span>
+              <span className="xl:hidden block text-[11px] text-ink-muted truncate mt-0.5">
+                {product.category}
+              </span>
+            </div>
           </div>
         );
       },
@@ -176,6 +187,8 @@ export default function AdminStockPage() {
     {
       key: 'category',
       header: 'หมวดหมู่',
+      headerClassName: 'hidden xl:table-cell',
+      className: 'hidden xl:table-cell',
       sortable: true,
       sortValue: (p) => p.category,
       render: (product) => (
@@ -213,7 +226,7 @@ export default function AdminStockPage() {
           Math.round((sold / (product.stock + sold || 1)) * 100)
         );
         return (
-          <div className="min-w-[155px]">
+          <div className="w-28 xl:w-36">
             <div className="flex justify-between text-[11px] mb-1 font-mono-num">
               <span className="text-ink-muted">ขาย {sold}</span>
               <span className="font-semibold text-ink">เหลือ {product.stock}</span>
@@ -418,8 +431,8 @@ export default function AdminStockPage() {
         </div>
       </Card>
 
-      {/* Mobile Cards (< lg) */}
-      <div className="lg:hidden space-y-2.5">
+      {/* Mobile & Tablet Cards (< lg) */}
+      <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-3">
         {filteredProducts.length > 0 ? (
           filteredProducts.map((product) => {
             const status = getStockStatus(product);
@@ -533,7 +546,7 @@ export default function AdminStockPage() {
             );
           })
         ) : (
-          <Card className="p-8 text-center text-ink-muted text-xs">
+          <Card className="md:col-span-2 p-8 text-center text-ink-muted text-xs">
             {loading ? 'กำลังโหลดรายการสต็อก...' : 'ไม่พบรายการขนมตามเงื่อนไขที่เลือก'}
           </Card>
         )}
@@ -549,7 +562,7 @@ export default function AdminStockPage() {
           loadingMessage="กำลังโหลดรายการสต็อก..."
           emptyMessage="ไม่พบรายการขนมตามเงื่อนไขที่เลือก"
           defaultPageSize={10}
-          minWidthClass="min-w-[820px]"
+          minWidthClass="min-w-0"
         />
       </div>
 

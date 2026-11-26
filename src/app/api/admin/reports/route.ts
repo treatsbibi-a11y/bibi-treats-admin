@@ -2,6 +2,8 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { resolveD1Binding } from '@/lib/d1-remote';
+import { getD1Orders } from '@/lib/d1';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,53 +14,66 @@ export async function GET(req: NextRequest) {
     const endDate = searchParams.get('endDate');
     const status = searchParams.get('status');
 
-    const where: Prisma.OrderWhereInput = {};
+    const d1Binding = resolveD1Binding();
+    let orders: any[];
 
-    // Filter by status if provided (default: exclude CANCELLED from sales analytics unless asked)
-    if (status && status !== 'ALL' && status !== 'all') {
-      where.status = status;
-    } else if (!status) {
-      where.status = { not: 'CANCELLED' };
-    }
+    if (d1Binding) {
+      const d1Orders = await getD1Orders({
+        status: status && status !== 'ALL' && status !== 'all' ? status : 'ALL',
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        d1Binding,
+      });
+      orders = !status ? d1Orders.filter((o) => o.status !== 'CANCELLED') : d1Orders;
+    } else {
+      const where: Prisma.OrderWhereInput = {};
 
-    // Filter by date range
-    if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) {
-        where.createdAt.gte = new Date(startDate);
+      // Filter by status if provided (default: exclude CANCELLED from sales analytics unless asked)
+      if (status && status !== 'ALL' && status !== 'all') {
+        where.status = status;
+      } else if (!status) {
+        where.status = { not: 'CANCELLED' };
       }
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        where.createdAt.lte = end;
-      }
-    }
 
-    const orders = await prisma.order.findMany({
-      where,
-      include: {
-        customer: true,
-        items: {
-          include: {
-            product: {
-              include: {
-                images: {
-                  orderBy: { displayOrder: 'asc' },
+      // Filter by date range
+      if (startDate || endDate) {
+        where.createdAt = {};
+        if (startDate) {
+          where.createdAt.gte = new Date(startDate);
+        }
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          where.createdAt.lte = end;
+        }
+      }
+
+      orders = await prisma.order.findMany({
+        where,
+        include: {
+          customer: true,
+          items: {
+            include: {
+              product: {
+                include: {
+                  images: {
+                    orderBy: { displayOrder: 'asc' },
+                  },
                 },
               },
             },
           },
         },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+    }
 
     const totalOrders = orders.length;
-    const totalSales = orders.reduce((sum, o) => sum + o.total, 0);
+    const totalSales = orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
     const totalItemsSold = orders.reduce(
-      (sum, o) => sum + o.items.reduce((iSum, item) => iSum + item.quantity, 0),
+      (sum, o) => sum + (o.items || []).reduce((iSum: number, item: any) => iSum + (Number(item.quantity) || 0), 0),
       0
     );
     const averageOrderValue = totalOrders > 0 ? Math.round((totalSales / totalOrders) * 100) / 100 : 0;
@@ -66,15 +81,15 @@ export async function GET(req: NextRequest) {
     // Aggregate by product
     const productMap = new Map<string, { productName: string; quantity: number; revenue: number }>();
     for (const order of orders) {
-      for (const item of order.items) {
+      for (const item of order.items || []) {
         const key = item.productId || item.productName;
         const current = productMap.get(key) || {
           productName: item.productName,
           quantity: 0,
           revenue: 0,
         };
-        current.quantity += item.quantity;
-        current.revenue += item.subtotal;
+        current.quantity += Number(item.quantity) || 0;
+        current.revenue += Number(item.subtotal) || 0;
         productMap.set(key, current);
       }
     }

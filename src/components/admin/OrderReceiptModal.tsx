@@ -80,9 +80,6 @@ export default function OrderReceiptModal({
             <span className="inline-flex items-center gap-2">
               <FontAwesomeIcon icon={faReceipt} className="w-3.5 h-3.5 text-primary-text" />
               <span className="font-mono-num">#{order.orderNumber}</span>
-              <span className="text-[10px] bg-surface-secondary border border-surface-border text-ink-muted px-1.5 py-0.5 rounded-sm font-mono">
-                80mm
-              </span>
             </span>
           ) : undefined
         }
@@ -125,7 +122,7 @@ export default function OrderReceiptModal({
                 className="flex-[2]"
               >
                 <FontAwesomeIcon icon={faPrint} className="w-3.5 h-3.5" />
-                <span>พิมพ์ใบเสร็จ (80mm)</span>
+                <span>พิมพ์ใบเสร็จ</span>
               </Button>
             </div>
           ) : undefined

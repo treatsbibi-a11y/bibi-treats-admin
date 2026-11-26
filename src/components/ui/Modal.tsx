@@ -114,15 +114,8 @@ export function Modal({
         }
         pressedOutsideRef.current = false;
       }}
-      className={`${SIZE_CLASSES[size]} ${
-        mobileSheet
-          ? 'w-full fixed inset-x-0 bottom-0 sm:relative sm:inset-auto sm:m-auto rounded-t-lg sm:rounded-lg max-h-[92dvh] sm:max-h-[88vh]'
-          : 'w-[calc(100%-1.5rem)] rounded-lg max-h-[88dvh]'
-      } bg-surface text-ink shadow-overlay overflow-hidden flex flex-col open:animate-in open:fade-in open:zoom-in-95 duration-150 ${className}`}
+      className={`${SIZE_CLASSES[size]} w-[calc(100%-1.5rem)] m-auto rounded-xl max-h-[88dvh] bg-surface text-ink border border-surface-border shadow-overlay overflow-hidden flex flex-col open:animate-in open:fade-in open:zoom-in-95 duration-150 ${className}`}
     >
-      {mobileSheet && (
-        <div className="w-9 h-1 bg-surface-border rounded-full mx-auto mt-2 sm:hidden shrink-0 no-print" />
-      )}
 
       {!hideHeader && (
         <div className="no-print shrink-0 px-4 sm:px-5 py-3.5 border-b border-surface-border-light bg-surface flex items-center justify-between gap-3">

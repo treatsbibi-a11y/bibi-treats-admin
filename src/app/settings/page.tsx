@@ -16,6 +16,7 @@ import {
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { showToast } from '@/components/ui/Toast';
+import { convertImageToWebP } from '@/lib/image-utils';
 import { StoreSettingsData } from '@/types';
 
 export default function AdminSettingsPage() {
@@ -65,8 +66,9 @@ export default function AdminSettingsPage() {
 
     setUploadingLogo(true);
     try {
+      const webpFile = await convertImageToWebP(file);
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', webpFile);
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
       if (!res.ok) {
         const errData = await res.json();
@@ -91,8 +93,9 @@ export default function AdminSettingsPage() {
 
     setUploadingQr(true);
     try {
+      const webpFile = await convertImageToWebP(file);
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', webpFile);
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
       if (!res.ok) {
         const errData = await res.json();

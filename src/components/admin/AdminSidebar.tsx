@@ -10,6 +10,7 @@ import {
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { NAV_GROUPS, isNavItemActive } from '@/lib/admin-nav';
+import { getStorefrontUrl } from '@/lib/utils';
 
 interface AdminSidebarProps {
   isOpen?: boolean;
@@ -54,7 +55,7 @@ export default function AdminSidebar({
 
       <aside
         aria-label="เมนูหลักผู้ดูแลระบบ"
-        className={`fixed top-0 bottom-0 left-0 z-50 w-[252px] max-w-[85vw] ${
+        className={`fixed top-0 bottom-0 left-0 z-50 w-[252px] max-w-[85vw] no-print print:hidden ${
           isCollapsed ? 'lg:w-[var(--sidebar-w-collapsed)]' : 'lg:w-[var(--sidebar-w)]'
         } h-[100dvh] max-h-[100dvh] bg-sidebar-bg text-sidebar-text border-r border-sidebar-border flex flex-col justify-between transition-all duration-200 ease-in-out lg:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
@@ -72,17 +73,14 @@ export default function AdminSidebar({
             className="flex items-center gap-2.5 min-w-0"
             title={shopName}
           >
-            {logoUrl ? (
-              <img
-                src={logoUrl}
-                alt={shopName}
-                className="w-8 h-8 rounded object-cover bg-white shrink-0 border border-white/10"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded bg-primary flex items-center justify-center text-white font-bold text-xs shrink-0">
-                BT
-              </div>
-            )}
+            <img
+              src={logoUrl || '/uploads/bibi-1795498989551-27zh7uk.png'}
+              alt={shopName}
+              className="w-8 h-8 rounded-lg object-cover bg-white shrink-0 border border-white/10"
+              onError={(e) => {
+                e.currentTarget.src = '/uploads/bibi-1795498989551-27zh7uk.png';
+              }}
+            />
 
             <div className={`min-w-0 ${isCollapsed ? 'lg:hidden' : ''}`}>
               <span className="font-semibold text-[13px] text-sidebar-text-active tracking-tight block truncate">
@@ -176,10 +174,11 @@ export default function AdminSidebar({
 
         {/* Footer Actions */}
         <div className="p-2.5 border-t border-sidebar-border space-y-1 shrink-0 bg-sidebar-bg">
-          <Link
-            href={process.env.NEXT_PUBLIC_STOREFRONT_URL || 'http://localhost:3002'}
+          <a
+            href={getStorefrontUrl()}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={onClose}
             title={isCollapsed ? 'ดูหน้าร้านออนไลน์' : undefined}
             className={`flex items-center ${
               isCollapsed ? 'lg:justify-center lg:px-0 px-3 justify-between' : 'justify-between px-3'
@@ -192,7 +191,7 @@ export default function AdminSidebar({
               icon={faArrowUpRightFromSquare}
               className="w-3.5 h-3.5 shrink-0 opacity-80"
             />
-          </Link>
+          </a>
 
           <button
             type="button"

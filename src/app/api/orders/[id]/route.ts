@@ -2,7 +2,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getD1OrderDetail, CloudflareD1Binding } from '@/lib/d1';
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { resolveD1Binding } from '@/lib/d1-remote';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +15,7 @@ interface RouteContext {
 const VALID_STATUSES = [
   'PENDING',
   'CONFIRMED',
+  'SLIP_UPLOADED',
   'PREPARING',
   'SHIPPING',
   'COMPLETED',
@@ -31,11 +32,8 @@ export async function GET(
   try {
     const { id } = params;
 
-    // Check Cloudflare D1 binding on Edge Runtime
-    let d1Binding: CloudflareD1Binding | undefined;
-    try {
-      d1Binding = (getRequestContext()?.env as any)?.DB;
-    } catch {}
+    // Check Cloudflare D1 binding on Edge Runtime or Localhost Remote Bridge
+    const d1Binding = resolveD1Binding();
 
     if (d1Binding) {
       const order = await getD1OrderDetail(id, d1Binding);
@@ -119,11 +117,8 @@ async function handleUpdateOrder(req: NextRequest, id: string) {
       );
     }
 
-    // Check Cloudflare D1 binding on Edge Runtime
-    let d1Binding: CloudflareD1Binding | undefined;
-    try {
-      d1Binding = (getRequestContext()?.env as any)?.DB;
-    } catch {}
+    // Check Cloudflare D1 binding on Edge Runtime or Localhost Remote Bridge
+    const d1Binding = resolveD1Binding();
 
     if (d1Binding) {
       // Find the target order

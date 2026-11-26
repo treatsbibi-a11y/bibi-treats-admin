@@ -1,9 +1,10 @@
-'use client';
+﻿'use client';
 
 import React from 'react';
 import {
   faClock,
   faCircleCheck,
+  faReceipt,
   faKitchenSet,
   faTruck,
   faCircleXmark,
@@ -24,24 +25,32 @@ export interface OrderStatusMeta {
 export const ORDER_STATUS_META: Record<OrderStatus, OrderStatusMeta> = {
   PENDING: {
     status: 'PENDING',
-    label: 'รอยืนยัน',
-    shortLabel: 'รอยืนยัน',
+    label: 'รอร้านยืนยัน',
+    shortLabel: 'รอร้านยืนยัน',
     variant: 'warning',
     icon: faClock,
     iconColorClass: 'text-semantic-yellow',
   },
   CONFIRMED: {
     status: 'CONFIRMED',
-    label: 'ยืนยันแล้ว',
-    shortLabel: 'ยืนยัน',
-    variant: 'info',
+    label: 'ร้านยืนยันแล้ว / รอชำระเงิน',
+    shortLabel: 'ร้านยืนยันแล้ว / รอชำระเงิน',
+    variant: 'success',
     icon: faCircleCheck,
+    iconColorClass: 'text-semantic-green',
+  },
+  SLIP_UPLOADED: {
+    status: 'SLIP_UPLOADED',
+    label: 'ชำระเงินแล้ว / รอตรวจสอบ',
+    shortLabel: 'ชำระเงินแล้ว / รอตรวจสอบ',
+    variant: 'info',
+    icon: faReceipt,
     iconColorClass: 'text-semantic-blue',
   },
   PREPARING: {
     status: 'PREPARING',
     label: 'กำลังเตรียมสินค้า',
-    shortLabel: 'เตรียม',
+    shortLabel: 'กำลังเตรียมสินค้า',
     variant: 'purple',
     icon: faKitchenSet,
     iconColorClass: 'text-semantic-purple',
@@ -49,23 +58,23 @@ export const ORDER_STATUS_META: Record<OrderStatus, OrderStatusMeta> = {
   SHIPPING: {
     status: 'SHIPPING',
     label: 'กำลังจัดส่ง',
-    shortLabel: 'จัดส่ง',
+    shortLabel: 'กำลังจัดส่ง',
     variant: 'primary',
     icon: faTruck,
     iconColorClass: 'text-primary-text',
   },
   COMPLETED: {
     status: 'COMPLETED',
-    label: 'จัดส่งสำเร็จ',
-    shortLabel: 'สำเร็จ',
+    label: 'เสร็จสิ้น',
+    shortLabel: 'เสร็จสิ้น',
     variant: 'success',
     icon: faCircleCheck,
     iconColorClass: 'text-semantic-green',
   },
   CANCELLED: {
     status: 'CANCELLED',
-    label: 'ยกเลิกออเดอร์',
-    shortLabel: 'ยกเลิก',
+    label: 'ปฏิเสธออเดอร์',
+    shortLabel: 'ปฏิเสธออเดอร์',
     variant: 'danger',
     icon: faCircleXmark,
     iconColorClass: 'text-semantic-red',
@@ -75,6 +84,7 @@ export const ORDER_STATUS_META: Record<OrderStatus, OrderStatusMeta> = {
 export const ORDER_STATUS_LIST: OrderStatusMeta[] = [
   ORDER_STATUS_META.PENDING,
   ORDER_STATUS_META.CONFIRMED,
+  ORDER_STATUS_META.SLIP_UPLOADED,
   ORDER_STATUS_META.PREPARING,
   ORDER_STATUS_META.SHIPPING,
   ORDER_STATUS_META.COMPLETED,
@@ -97,8 +107,8 @@ export function OrderStatusBadge({
     );
   }
   return (
-    <Badge variant={meta.variant} size={size} dot>
-      {meta.shortLabel}
+    <Badge variant={meta.variant} size={size}>
+      {meta.label}
     </Badge>
   );
 }

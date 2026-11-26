@@ -5,23 +5,19 @@ import { useRouter } from 'next/navigation';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faMagnifyingGlass,
-  faPlus,
-  faMoon,
-  faSun,
-  faStore,
   faBagShopping,
   faBox,
   faArrowRight,
   faBolt,
+  faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { Modal } from '@/components/ui/Modal';
 import { ALL_NAV_ITEMS } from '@/lib/admin-nav';
-import { useTheme } from '@/components/theme/ThemeProvider';
 import { OrderDetail, ProductWithImages } from '@/types';
 
 interface PaletteItem {
   id: string;
-  group: 'หน้าหลัก' | 'คำสั่งด่วน' | 'คำสั่งซื้อ' | 'สินค้า';
+  group: 'หน้าเมนู' | 'คำสั่งซื้อ' | 'สินค้า';
   title: string;
   subtitle?: string;
   icon: typeof faMagnifyingGlass;
@@ -31,18 +27,13 @@ interface PaletteItem {
 interface CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
-  isStoreOpen?: boolean;
-  onToggleStoreStatus?: () => void;
 }
 
 export default function CommandPalette({
   isOpen,
   onClose,
-  isStoreOpen,
-  onToggleStoreStatus,
 }: CommandPaletteProps) {
   const router = useRouter();
-  const { resolvedTheme, toggleTheme } = useTheme();
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const [orders, setOrders] = useState<OrderDetail[]>([]);
@@ -98,7 +89,7 @@ export default function CommandPalette({
       );
     }).map((item) => ({
       id: `page-${item.key}`,
-      group: 'หน้าหลัก',
+      group: 'หน้าเมนู',
       title: item.label,
       subtitle: item.href,
       icon: item.icon,
@@ -108,56 +99,6 @@ export default function CommandPalette({
       },
     }));
 
-    const quickActions: PaletteItem[] = [
-      {
-        id: 'action-add-product',
-        group: 'คำสั่งด่วน',
-        title: 'เพิ่มเมนูสินค้าใหม่',
-        subtitle: 'เปิดหน้าสินค้าพร้อมหน้าต่างเพิ่มเมนู',
-        icon: faPlus,
-        onSelect: () => {
-          router.push('/products?new=1');
-          onClose();
-        },
-      },
-      {
-        id: 'action-toggle-theme',
-        group: 'คำสั่งด่วน',
-        title:
-          resolvedTheme === 'dark'
-            ? 'เปลี่ยนเป็นโหมดสว่าง (Light Mode)'
-            : 'เปลี่ยนเป็นโหมดมืด (Dark Mode)',
-        subtitle: 'สลับธีมหน้าจอผู้ดูแลระบบ',
-        icon: resolvedTheme === 'dark' ? faSun : faMoon,
-        onSelect: () => {
-          toggleTheme();
-          onClose();
-        },
-      },
-    ];
-
-    if (onToggleStoreStatus) {
-      quickActions.push({
-        id: 'action-toggle-store',
-        group: 'คำสั่งด่วน',
-        title: isStoreOpen ? 'ปิดรับออเดอร์ชั่วคราว' : 'เปิดรับออเดอร์หน้าร้าน',
-        subtitle: `สถานะปัจจุบัน: ${isStoreOpen ? 'เปิดรับออเดอร์' : 'ปิดร้านชั่วคราว'}`,
-        icon: faStore,
-        onSelect: () => {
-          onToggleStoreStatus();
-          onClose();
-        },
-      });
-    }
-
-    const filteredActions = quickActions.filter((act) => {
-      if (!q) return true;
-      return (
-        act.title.toLowerCase().includes(q) ||
-        (act.subtitle?.toLowerCase().includes(q) ?? false)
-      );
-    });
-
     const orderItems: PaletteItem[] = q
       ? orders
           .filter(
@@ -166,7 +107,7 @@ export default function CommandPalette({
               o.customer.name.toLowerCase().includes(q) ||
               o.customer.phone.toLowerCase().includes(q)
           )
-          .slice(0, 5)
+          .slice(0, 6)
           .map((o) => ({
             id: `order-${o.id}`,
             group: 'คำสั่งซื้อ',
@@ -187,7 +128,7 @@ export default function CommandPalette({
               p.name.toLowerCase().includes(q) ||
               p.category.toLowerCase().includes(q)
           )
-          .slice(0, 5)
+          .slice(0, 6)
           .map((p) => ({
             id: `product-${p.id}`,
             group: 'สินค้า',
@@ -201,8 +142,10 @@ export default function CommandPalette({
           }))
       : [];
 
-    return [...pageItems, ...filteredActions, ...orderItems, ...productItems];
-  }, [query, orders, products, resolvedTheme, toggleTheme, isStoreOpen, onToggleStoreStatus, router, onClose]);
+    return q
+      ? [...orderItems, ...productItems, ...pageItems]
+      : pageItems;
+  }, [query, orders, products, router, onClose]);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -237,7 +180,7 @@ export default function CommandPalette({
       isOpen={isOpen}
       onClose={onClose}
       hideHeader
-      ariaLabel="Command Palette"
+      ariaLabel="ค้นหาด่วน"
       size="md"
       bodyClassName="p-0"
     >
@@ -252,12 +195,26 @@ export default function CommandPalette({
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="พิมพ์คำสั่ง หน้าจอ เลขออเดอร์ หรือชื่อเมนูสินค้า..."
+            placeholder="ค้นหาด่วน: เลขออเดอร์, ชื่อลูกค้า, เบอร์โทร, สินค้า หรือหน้าเมนู..."
             className="flex-1 bg-transparent outline-none text-sm text-ink placeholder:text-ink-muted"
           />
-          <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-surface-secondary text-ink-muted border border-surface-border rounded-sm">
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              className="p-1 rounded text-ink-muted hover:text-ink hover:bg-surface-secondary transition-colors"
+              aria-label="ล้างคำค้นหา"
+            >
+              <FontAwesomeIcon icon={faXmark} className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-1.5 py-0.5 text-[10px] font-mono bg-surface-secondary text-ink-muted hover:text-ink border border-surface-border rounded-sm transition-colors"
+          >
             ESC
-          </kbd>
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-2 space-y-3">

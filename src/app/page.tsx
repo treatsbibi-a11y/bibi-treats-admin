@@ -18,14 +18,17 @@ import {
   faReceipt,
   faTriangleExclamation,
   faUtensils,
+  faDownload,
 } from '@fortawesome/free-solid-svg-icons';
 import { faInstagram } from '@fortawesome/free-brands-svg-icons';
 import { Card, CardBody, CardHeader, CardFooter } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { useSmartPolling } from '@/hooks/useSmartPolling';
 import { Modal } from '@/components/ui/Modal';
 import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
 import { OrderStatusBadge } from '@/components/admin/OrderStatusBadge';
+import { downloadImageAsJpeg } from '@/lib/image-utils';
 import type { SalesChartPoint } from '@/components/charts/SalesAreaChart';
 import { OrderDetail } from '@/types';
 
@@ -75,10 +78,11 @@ export default function AdminDashboardPage() {
   const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null);
   const [viewingSlipUrl, setViewingSlipUrl] = useState<string | null>(null);
 
-  const fetchStats = async () => {
-    setLoading(true);
+  const fetchStats = async (silentOrEvent?: boolean | unknown) => {
+    const silent = silentOrEvent === true;
+    if (!silent) setLoading(true);
     try {
-      const res = await fetch('/api/admin/stats');
+      const res = await fetch('/api/admin/stats', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setStats(data);
@@ -86,13 +90,15 @@ export default function AdminDashboardPage() {
     } catch (err) {
       console.error('Error fetching admin stats:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchStats();
+    fetchStats(false);
   }, []);
+
+  useSmartPolling(() => fetchStats(true), 3000);
 
   const chartData = useMemo(() => {
     if (!stats) return [];
@@ -119,7 +125,7 @@ export default function AdminDashboardPage() {
             #{order.orderNumber}
           </div>
           <div className="text-[11px] text-ink-muted">
-            {order.paymentMethod === 'COD' ? 'เก็บเงินปลายทาง (COD)' : 'โอนเงิน / QR'}
+            {order.paymentMethod === 'COD' ? 'เก็บเงินปลายทาง' : 'PromptPay'}
           </div>
         </div>
       ),
@@ -534,7 +540,7 @@ export default function AdminDashboardPage() {
                       #{order.orderNumber}
                     </span>
                     <Badge variant="neutral" size="sm">
-                      {order.paymentMethod === 'COD' ? 'COD' : 'โอนเงิน/QR'}
+                      {order.paymentMethod === 'COD' ? 'เก็บเงินปลายทาง' : 'PromptPay'}
                     </Badge>
                   </div>
                   <OrderStatusBadge status={order.status} />
@@ -745,8 +751,8 @@ export default function AdminDashboardPage() {
                 <span>วิธีการชำระเงิน:</span>
                 <span className="font-medium text-ink">
                   {selectedOrder.paymentMethod === 'COD'
-                    ? 'เก็บเงินปลายทาง (COD)'
-                    : 'โอนเงิน / PromptPay'}
+                    ? 'เก็บเงินปลายทาง'
+                    : 'PromptPay'}
                 </span>
               </div>
               <div className="flex justify-between text-sm font-semibold text-ink pt-2 border-t border-surface-border-light items-baseline">
@@ -772,9 +778,26 @@ export default function AdminDashboardPage() {
         }
         size="md"
         footer={
-          <Button variant="secondary" size="sm" onClick={() => setViewingSlipUrl(null)}>
-            ปิด
-          </Button>
+          <div className="flex items-center justify-end gap-2">
+            {viewingSlipUrl && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() =>
+                  downloadImageAsJpeg(
+                    viewingSlipUrl,
+                    `slip-${selectedOrder?.orderNumber || 'payment'}.jpg`
+                  ).catch(() => {})
+                }
+              >
+                <FontAwesomeIcon icon={faDownload} className="w-3.5 h-3.5 mr-1.5" />
+                ดาวน์โหลด JPEG
+              </Button>
+            )}
+            <Button variant="secondary" size="sm" onClick={() => setViewingSlipUrl(null)}>
+              ปิด
+            </Button>
+          </div>
         }
       >
         {viewingSlipUrl && (

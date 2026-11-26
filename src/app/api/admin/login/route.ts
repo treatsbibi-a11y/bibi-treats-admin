@@ -2,7 +2,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { comparePassword, signAdminToken, verifyAdminToken } from '@/lib/auth';
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { resolveD1Binding } from '@/lib/d1-remote';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,18 +46,12 @@ export async function POST(req: NextRequest) {
     }
 
     let admin: any = null;
-    try {
-      const ctx = getRequestContext();
-      if (ctx?.env && (ctx.env as any).DB) {
-        admin = await (ctx.env as any).DB.prepare('SELECT * FROM Admin WHERE username = ?')
-          .bind(String(username).trim())
-          .first();
-      }
-    } catch (err) {
-      console.warn('D1 direct query error in login:', err);
-    }
-
-    if (!admin) {
+    const d1Binding = resolveD1Binding();
+    if (d1Binding) {
+      admin = await d1Binding.prepare('SELECT * FROM Admin WHERE username = ?')
+        .bind(String(username).trim())
+        .first();
+    } else {
       admin = await prisma.admin.findUnique({
         where: {
           username: String(username).trim(),
@@ -98,10 +92,12 @@ export async function POST(req: NextRequest) {
       token,
     });
 
-    // Set HTTP-only secure cookie
+    // Set HTTP-only cookie (secure only over HTTPS so localhost npm start works over HTTP)
+    const isHttps =
+      req.headers.get('x-forwarded-proto') === 'https' || req.nextUrl.protocol === 'https:';
     response.cookies.set('bibi_admin_token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isHttps,
       sameSite: 'lax',
       path: '/',
       maxAge: 7 * 24 * 60 * 60, // 7 days

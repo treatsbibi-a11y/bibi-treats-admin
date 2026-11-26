@@ -122,7 +122,7 @@ export function DataTable<T>({
                   <th
                     key={col.key}
                     style={col.width ? { width: col.width } : undefined}
-                    className={`px-4 py-2.5 whitespace-nowrap select-none ${alignClass(col.align)} ${
+                    className={`px-3 xl:px-4 py-2.5 whitespace-nowrap select-none ${alignClass(col.align)} ${
                       col.headerClassName ?? ''
                     }`}
                   >
@@ -173,7 +173,7 @@ export function DataTable<T>({
                   {columns.map((col) => (
                     <td
                       key={col.key}
-                      className={`px-4 py-2.5 align-middle ${alignClass(col.align)} ${
+                      className={`px-3 xl:px-4 py-2.5 align-middle ${alignClass(col.align)} ${
                         col.className ?? ''
                       }`}
                     >
@@ -197,7 +197,7 @@ export function DataTable<T>({
       </div>
 
       {showPagination && totalItems > 0 && (
-        <div className="px-4 py-2.5 border-t border-surface-border-light bg-surface-secondary/50 flex flex-wrap items-center justify-between gap-2 text-xs text-ink-muted">
+        <div className="px-4 py-2.5 border-t border-surface-border-light bg-surface-secondary/50 flex flex-wrap items-center justify-between gap-2 text-xs text-ink-muted print:hidden">
           <div className="flex items-center gap-3">
             <span className="font-mono-num">
               แสดง {startIdx}–{endIdx} จาก {totalItems.toLocaleString()} รายการ

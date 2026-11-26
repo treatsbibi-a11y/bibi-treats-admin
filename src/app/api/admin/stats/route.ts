@@ -1,16 +1,13 @@
 export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getD1Orders, getD1Products } from '@/lib/d1';
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { resolveD1Binding } from '@/lib/d1-remote';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
-    let d1Binding: any = null;
-    try {
-      d1Binding = (getRequestContext()?.env as any)?.DB;
-    } catch {}
+    const d1Binding = resolveD1Binding();
 
     const now = new Date();
     const thaiDays = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];

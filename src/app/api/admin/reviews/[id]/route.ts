@@ -1,6 +1,6 @@
 export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { resolveD1Binding } from '@/lib/d1-remote';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -23,10 +23,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       );
     }
 
-    let d1Binding: any;
-    try {
-      d1Binding = (getRequestContext()?.env as any)?.DB;
-    } catch {}
+    const d1Binding = resolveD1Binding();
 
     const now = new Date().toISOString();
 
@@ -72,10 +69,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   try {
     const { id } = params;
 
-    let d1Binding: any;
-    try {
-      d1Binding = (getRequestContext()?.env as any)?.DB;
-    } catch {}
+    const d1Binding = resolveD1Binding();
 
     if (d1Binding) {
       await d1Binding.prepare(`DELETE FROM Review WHERE id = ?`).bind(id).run();

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import AdminHeader from '@/components/admin/AdminHeader';
 import CommandPalette from '@/components/admin/CommandPalette';
@@ -16,6 +16,7 @@ export default function AdminShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -63,6 +64,10 @@ export default function AdminShell({
     async function loadSettings() {
       try {
         const res = await fetch('/api/admin/settings');
+        if (res.status === 401) {
+          router.replace('/login');
+          return;
+        }
         if (res.ok && isMounted) {
           const data = await res.json();
           setStoreSettings(data);
@@ -110,12 +115,18 @@ export default function AdminShell({
       if (res.ok) {
         const updated = await res.json();
         setStoreSettings(updated);
+        window.dispatchEvent(new CustomEvent('bibi-settings-updated', { detail: updated }));
         showToast({
           title: newStatus ? 'เปิดรับออเดอร์หน้าร้านแล้ว' : 'ปิดรับออเดอร์ชั่วคราวแล้ว',
           variant: newStatus ? 'success' : 'warning',
         });
       } else {
-        showToast({ title: 'เปลี่ยนสถานะร้านค้าไม่สำเร็จ', variant: 'error' });
+        const errData = await res.json().catch(() => null);
+        showToast({
+          title: 'เปลี่ยนสถานะร้านค้าไม่สำเร็จ',
+          description: errData?.error,
+          variant: 'error',
+        });
       }
     } catch {
       showToast({ title: 'เกิดข้อผิดพลาดในการเชื่อมต่อ', variant: 'error' });
@@ -129,7 +140,7 @@ export default function AdminShell({
   }
 
   return (
-    <div className="min-h-screen bg-surface-body text-ink flex flex-col lg:flex-row">
+    <div className="min-h-screen bg-surface-body text-ink flex flex-col lg:flex-row overflow-x-hidden print:block print:min-h-0 print:overflow-visible">
       <AdminSidebar
         isOpen={sidebarOpen}
         isCollapsed={sidebarCollapsed}
@@ -140,7 +151,7 @@ export default function AdminShell({
       />
 
       <div
-        className={`flex-1 flex flex-col min-w-0 transition-all duration-200 ${
+        className={`flex-1 flex flex-col min-w-0 transition-all duration-200 print:pl-0 ${
           sidebarCollapsed
             ? 'lg:pl-[var(--sidebar-w-collapsed)]'
             : 'lg:pl-[var(--sidebar-w)]'
@@ -156,7 +167,7 @@ export default function AdminShell({
           onToggleStoreStatus={handleToggleStoreStatus}
         />
 
-        <main className="flex-1 p-4 sm:p-5 lg:p-6 max-w-[1440px] w-full mx-auto">
+        <main className="flex-1 p-3.5 sm:p-5 lg:p-6 max-w-[1440px] w-full mx-auto min-w-0 print:p-0 print:max-w-none print:overflow-visible">
           {children}
         </main>
       </div>
@@ -164,8 +175,6 @@ export default function AdminShell({
       <CommandPalette
         isOpen={commandOpen}
         onClose={() => setCommandOpen(false)}
-        isStoreOpen={storeSettings?.isStoreOpen}
-        onToggleStoreStatus={handleToggleStoreStatus}
       />
     </div>
   );

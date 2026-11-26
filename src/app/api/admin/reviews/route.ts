@@ -1,6 +1,6 @@
 export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { resolveD1Binding } from '@/lib/d1-remote';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -30,17 +30,25 @@ export async function GET(req: NextRequest) {
     const ratingParam = searchParams.get('rating');
     const statusParam = searchParams.get('status');
 
-    let d1Binding: any;
-    try {
-      d1Binding = (getRequestContext()?.env as any)?.DB;
-    } catch {}
+    const d1Binding = resolveD1Binding();
 
     let allRows: any[] = [];
 
     if (d1Binding) {
+      try {
+        await d1Binding.prepare(`ALTER TABLE Review ADD COLUMN productId TEXT`).bind().run();
+      } catch {
+        // Column already exists
+      }
+      try {
+        await d1Binding.prepare(`ALTER TABLE Review ADD COLUMN productName TEXT`).bind().run();
+      } catch {
+        // Column already exists
+      }
+
       const { results } = await d1Binding
         .prepare(
-          `SELECT id, customerName, rating, comment, images, status, createdAt, updatedAt
+          `SELECT id, customerName, rating, comment, images, productId, productName, status, createdAt, updatedAt
            FROM Review
            ORDER BY datetime(createdAt) DESC`
         )
@@ -53,6 +61,8 @@ export async function GET(req: NextRequest) {
         rating: Number(row.rating),
         comment: row.comment,
         images: parseImages(row.images),
+        productId: row.productId ?? null,
+        productName: row.productName ?? null,
         status: row.status === 'HIDDEN' ? 'HIDDEN' : 'VISIBLE',
         createdAt: new Date(row.createdAt).toISOString(),
         updatedAt: new Date(row.updatedAt).toISOString(),
@@ -67,6 +77,8 @@ export async function GET(req: NextRequest) {
         rating: row.rating,
         comment: row.comment,
         images: parseImages(row.images),
+        productId: row.productId ?? null,
+        productName: row.productName ?? null,
         status: row.status === 'HIDDEN' ? 'HIDDEN' : 'VISIBLE',
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
@@ -94,7 +106,8 @@ export async function GET(req: NextRequest) {
       filtered = filtered.filter(
         (r) =>
           r.customerName.toLowerCase().includes(search) ||
-          r.comment.toLowerCase().includes(search)
+          r.comment.toLowerCase().includes(search) ||
+          (r.productName && r.productName.toLowerCase().includes(search))
       );
     }
 

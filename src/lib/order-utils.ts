@@ -5,13 +5,19 @@ export const ORDER_STATUS_MAP: Record<
   { label: string; bg: string; text: string; border: string }
 > = {
   PENDING: {
-    label: 'รอยืนยัน',
+    label: 'รอร้านยืนยัน',
     bg: 'bg-amber-50',
     text: 'text-amber-700',
     border: 'border-amber-200',
   },
   CONFIRMED: {
-    label: 'ยืนยันแล้ว',
+    label: 'ร้านยืนยันแล้ว / รอชำระเงิน',
+    bg: 'bg-emerald-50',
+    text: 'text-emerald-700',
+    border: 'border-emerald-200',
+  },
+  SLIP_UPLOADED: {
+    label: 'ชำระเงินแล้ว / รอตรวจสอบ',
     bg: 'bg-blue-50',
     text: 'text-blue-700',
     border: 'border-blue-200',
@@ -29,13 +35,13 @@ export const ORDER_STATUS_MAP: Record<
     border: 'border-indigo-200',
   },
   COMPLETED: {
-    label: 'สำเร็จ',
+    label: 'เสร็จสิ้น',
     bg: 'bg-emerald-50',
     text: 'text-emerald-700',
     border: 'border-emerald-200',
   },
   CANCELLED: {
-    label: 'ยกเลิก',
+    label: 'ปฏิเสธออเดอร์',
     bg: 'bg-rose-50',
     text: 'text-rose-700',
     border: 'border-rose-200',
@@ -43,6 +49,7 @@ export const ORDER_STATUS_MAP: Record<
 };
 
 export function formatPrice(amount: number): string {
+  // Formats price in Thai locale for UI consistency
   return new Intl.NumberFormat('th-TH', {
     style: 'decimal',
     minimumFractionDigits: 0,

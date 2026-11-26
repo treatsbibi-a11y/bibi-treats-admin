@@ -1,11 +1,8 @@
 export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
-import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { r2Client } from '@/lib/r2';
+import { fetchR2Object } from '@/lib/d1-remote';
 
 export const dynamic = 'force-dynamic';
-
-const bucketName = process.env.CLOUDFLARE_R2_BUCKET_NAME || 'bibi-treats-assets';
 
 export async function GET(
   req: NextRequest,
@@ -13,32 +10,24 @@ export async function GET(
 ) {
   try {
     const filename = params.path?.join('/') || '';
-    if (!filename || filename.includes('..')) {
+    if (!filename || filename.includes('..') || filename.includes('\\') || filename.includes('\0')) {
       return new NextResponse('File not found', { status: 404 });
     }
 
     const cleanKey = filename.startsWith('uploads/') ? filename : `uploads/${filename}`;
-    const command = new GetObjectCommand({
-      Bucket: bucketName,
-      Key: cleanKey,
-    });
-
-    const data = await r2Client.send(command);
-    if (!data.Body) {
+    const obj = await fetchR2Object(cleanKey);
+    if (!obj) {
       return new NextResponse('File not found', { status: 404 });
     }
 
-    const bytes = await data.Body.transformToByteArray();
-    const contentType = data.ContentType || 'image/jpeg';
-
-    return new Response(bytes as any, {
+    return new Response(obj.bytes as any, {
       status: 200,
       headers: {
-        'Content-Type': contentType,
+        'Content-Type': obj.contentType,
         'Cache-Control': 'public, max-age=31536000, immutable',
       },
     });
-  } catch (error) {
+  } catch {
     return new NextResponse('File not found', { status: 404 });
   }
 }

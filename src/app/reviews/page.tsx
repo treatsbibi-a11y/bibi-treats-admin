@@ -11,18 +11,13 @@ import {
   faUser,
   faRotate,
   faXmark,
+  faDownload,
 } from '@fortawesome/free-solid-svg-icons';
+import { useSmartPolling } from '@/hooks/useSmartPolling';
+import { downloadImageAsJpeg } from '@/lib/image-utils';
+import type { ReviewItem } from '@/types';
 
-interface AdminReviewItem {
-  id: string;
-  customerName: string;
-  rating: number;
-  comment: string;
-  images: string[];
-  status: 'VISIBLE' | 'HIDDEN';
-  createdAt: string;
-  updatedAt: string;
-}
+type AdminReviewItem = ReviewItem;
 
 interface AdminReviewStats {
   totalCount: number;
@@ -62,9 +57,10 @@ export default function AdminReviewsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [previewImages, setPreviewImages] = useState<string[] | null>(null);
 
-  const loadReviews = useCallback(async () => {
+  const loadReviews = useCallback(async (silentOrEvent?: boolean | unknown) => {
+    const silent = silentOrEvent === true;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const params = new URLSearchParams();
       if (search.trim()) params.set('search', search.trim());
       if (ratingFilter !== 'all') params.set('rating', ratingFilter);
@@ -81,13 +77,15 @@ export default function AdminReviewsPage() {
     } catch (err) {
       console.error('Failed to load admin reviews:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [search, ratingFilter, statusFilter]);
 
   useEffect(() => {
-    loadReviews();
+    loadReviews(false);
   }, [loadReviews]);
+
+  useSmartPolling(() => loadReviews(true), 5000);
 
   const handleToggleStatus = async (review: AdminReviewItem) => {
     const nextStatus = review.status === 'VISIBLE' ? 'HIDDEN' : 'VISIBLE';
@@ -273,6 +271,11 @@ export default function AdminReviewsPage() {
                       <span className="text-[11px] text-ink-muted font-mono">
                         {formatThaiDate(review.createdAt)}
                       </span>
+                      {review.productName && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-sky-50 text-sky-700 border border-sky-200/80">
+                          {review.productName}
+                        </span>
+                      )}
                     </div>
 
                     <p className="text-sm text-ink-secondary leading-relaxed">
@@ -357,12 +360,21 @@ export default function AdminReviewsPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[70vh] overflow-y-auto">
               {previewImages.map((url, idx) => (
-                <img
-                  key={idx}
-                  src={url}
-                  alt={`รูปภาพ ${idx + 1}`}
-                  className="w-full h-56 object-cover rounded-xl border border-surface-border"
-                />
+                <div key={idx} className="relative group rounded-xl overflow-hidden border border-surface-border">
+                  <img
+                    src={url}
+                    alt={`รูปภาพ ${idx + 1}`}
+                    className="w-full h-56 object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => downloadImageAsJpeg(url, `review-photo-${idx + 1}.jpg`).catch(() => {})}
+                    className="absolute bottom-2 right-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900/85 hover:bg-slate-900 text-white text-xs font-medium shadow-md cursor-pointer"
+                  >
+                    <FontAwesomeIcon icon={faDownload} className="w-3 h-3" />
+                    <span>JPEG</span>
+                  </button>
+                </div>
               ))}
             </div>
           </div>

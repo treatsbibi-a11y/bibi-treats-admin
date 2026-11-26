@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -18,6 +18,7 @@ import {
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/components/theme/ThemeProvider';
+import { getStorefrontUrl } from '@/lib/utils';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -27,6 +28,23 @@ export default function AdminLoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>('/uploads/bibi-1795498989551-27zh7uk.png');
+  const [shopName, setShopName] = useState<string>("Bibi's Treats");
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/settings')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!active || !data) return;
+        if (data.logoUrl) setLogoUrl(data.logoUrl);
+        if (data.shopName) setShopName(data.shopName);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleFillDemo = () => {
     setUsername('admin');
@@ -70,13 +88,15 @@ export default function AdminLoginPage() {
     <div className="min-h-[100dvh] bg-surface-body text-ink flex flex-col justify-center items-center px-4 py-8">
       {/* Top Bar */}
       <div className="w-full max-w-sm mb-4 flex items-center justify-between">
-        <Link
-          href={process.env.NEXT_PUBLIC_STOREFRONT_URL || 'http://localhost:3002'}
+        <a
+          href={getStorefrontUrl()}
+          target="_blank"
+          rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-secondary hover:text-ink transition-colors py-1 px-2 -ml-2 rounded hover:bg-surface-secondary"
         >
           <FontAwesomeIcon icon={faArrowLeft} className="w-3 h-3 text-ink-muted" />
           <span>กลับหน้าร้านค้า</span>
-        </Link>
+        </a>
 
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-mono text-ink-muted">Admin Console</span>
@@ -98,11 +118,19 @@ export default function AdminLoginPage() {
       {/* Main Login Card */}
       <Card className="w-full max-w-sm p-6">
         <div className="text-center mb-5">
-          <div className="inline-flex items-center justify-center w-11 h-11 rounded-lg bg-sidebar-bg text-white mb-3 border border-sidebar-border">
-            <span className="font-bold text-sm text-primary">BT</span>
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white p-1 mb-3 shadow-md border-2 border-surface-border overflow-hidden ring-2 ring-primary/20">
+            <img
+              src={logoUrl || '/uploads/bibi-1795498989551-27zh7uk.png'}
+              alt={shopName}
+              className="w-full h-full object-cover rounded-full scale-110"
+              onError={(e) => {
+                // fallback to default upload image if dynamic URL fails
+                e.currentTarget.src = '/uploads/bibi-1795498989551-27zh7uk.png';
+              }}
+            />
           </div>
           <h1 className="text-lg font-semibold text-ink tracking-tight">
-            Bibi&apos;s Treats Admin
+            {shopName} Admin
           </h1>
           <p className="text-xs text-ink-muted mt-0.5">
             ระบบจัดการร้านและสต็อกสินค้า

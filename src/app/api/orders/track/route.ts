@@ -1,6 +1,8 @@
 export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { resolveD1Binding } from '@/lib/d1-remote';
+import { getD1OrderDetail } from '@/lib/d1';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,26 +38,32 @@ export async function POST(req: NextRequest) {
     const cleanOrderNumber = orderNumber.trim().toUpperCase();
     const normalizedInputPhone = cleanPhone(phone.trim());
 
-    // Find the order by orderNumber
-    const order = await prisma.order.findUnique({
-      where: {
-        orderNumber: cleanOrderNumber,
-      },
-      include: {
-        customer: true,
-        items: {
-          include: {
-            product: {
-              include: {
-                images: {
-                  orderBy: { displayOrder: 'asc' },
+    const d1Binding = resolveD1Binding();
+    let order: any = null;
+
+    if (d1Binding) {
+      order = await getD1OrderDetail(cleanOrderNumber, d1Binding);
+    } else {
+      order = await prisma.order.findUnique({
+        where: {
+          orderNumber: cleanOrderNumber,
+        },
+        include: {
+          customer: true,
+          items: {
+            include: {
+              product: {
+                include: {
+                  images: {
+                    orderBy: { displayOrder: 'asc' },
+                  },
                 },
               },
             },
           },
         },
-      },
-    });
+      });
+    }
 
     if (!order) {
       return NextResponse.json(
@@ -93,14 +101,14 @@ export async function POST(req: NextRequest) {
       total: order.total,
       note: order.note,
       createdAt: order.createdAt,
-      updatedAt: order.updatedAt,
+      updatedAt: order.updatedAt || order.createdAt,
       customer: {
         name: order.customer.name,
         phone: order.customer.phone,
         instagram: order.customer.instagram,
         address: order.customer.address,
       },
-      items: order.items.map((item) => ({
+      items: order.items.map((item: any) => ({
         id: item.id,
         productId: item.productId,
         productName: item.productName,
@@ -108,7 +116,7 @@ export async function POST(req: NextRequest) {
         price: item.price,
         subtotal: item.subtotal,
         imageUrl:
-          item.product?.images.find((img) => img.isPrimary)?.imageUrl ||
+          item.product?.images.find((img: any) => img.isPrimary)?.imageUrl ||
           item.product?.images[0]?.imageUrl ||
           null,
       })),

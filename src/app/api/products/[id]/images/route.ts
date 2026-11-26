@@ -1,6 +1,7 @@
 export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { resolveD1Binding, CloudflareD1Binding } from '@/lib/d1-remote';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,6 +9,23 @@ interface RouteContext {
   params: {
     id: string;
   };
+}
+
+async function getD1ProductImages(d1: CloudflareD1Binding, productId: string) {
+  const { results } = await d1
+    .prepare(
+      `SELECT id, productId, imageUrl, isPrimary, displayOrder
+       FROM ProductImage WHERE productId = ? ORDER BY displayOrder ASC`
+    )
+    .bind(productId)
+    .all<any>();
+  return (results || []).map((img: any) => ({
+    id: img.id,
+    productId: img.productId,
+    imageUrl: img.imageUrl,
+    isPrimary: Boolean(img.isPrimary),
+    displayOrder: Number(img.displayOrder ?? 0),
+  }));
 }
 
 // POST /api/products/[id]/images - add image
@@ -25,6 +43,42 @@ export async function POST(
         { error: 'กรุณาระบุ URL ของรูปภาพ' },
         { status: 400 }
       );
+    }
+
+    const d1Binding = resolveD1Binding();
+    if (d1Binding) {
+      const product = await d1Binding
+        .prepare(`SELECT id FROM Product WHERE id = ? LIMIT 1`)
+        .bind(id)
+        .first();
+      if (!product) {
+        return NextResponse.json({ error: 'ไม่พบข้อมูลสินค้านี้' }, { status: 404 });
+      }
+
+      const existingImages = await getD1ProductImages(d1Binding, id);
+      const shouldBePrimary =
+        isPrimary !== undefined ? Boolean(isPrimary) : existingImages.length === 0;
+
+      if (shouldBePrimary) {
+        await d1Binding
+          .prepare(`UPDATE ProductImage SET isPrimary = 0 WHERE productId = ?`)
+          .bind(id)
+          .run();
+      }
+
+      const nextOrder =
+        displayOrder !== undefined ? Number(displayOrder) : existingImages.length + 1;
+
+      await d1Binding
+        .prepare(
+          `INSERT INTO ProductImage (id, productId, imageUrl, isPrimary, displayOrder)
+           VALUES (?, ?, ?, ?, ?)`
+        )
+        .bind(crypto.randomUUID(), id, imageUrl.trim(), shouldBePrimary ? 1 : 0, nextOrder)
+        .run();
+
+      const updatedImages = await getD1ProductImages(d1Binding, id);
+      return NextResponse.json(updatedImages, { status: 201 });
     }
 
     const product = await prisma.product.findUnique({
@@ -86,6 +140,64 @@ export async function PUT(
   try {
     const { id } = params;
     const body = await req.json();
+
+    const d1Binding = resolveD1Binding();
+    if (d1Binding) {
+      const product = await d1Binding
+        .prepare(`SELECT id FROM Product WHERE id = ? LIMIT 1`)
+        .bind(id)
+        .first();
+      if (!product) {
+        return NextResponse.json({ error: 'ไม่พบข้อมูลสินค้านี้' }, { status: 404 });
+      }
+
+      if (body.action === 'SET_PRIMARY' || (body.imageId && body.isPrimary)) {
+        const targetId = body.imageId;
+        await d1Binding
+          .prepare(`UPDATE ProductImage SET isPrimary = 0 WHERE productId = ?`)
+          .bind(id)
+          .run();
+        await d1Binding
+          .prepare(`UPDATE ProductImage SET isPrimary = 1 WHERE id = ? AND productId = ?`)
+          .bind(targetId, id)
+          .run();
+      } else if (body.action === 'REORDER' && Array.isArray(body.orderedIds)) {
+        for (let index = 0; index < body.orderedIds.length; index++) {
+          await d1Binding
+            .prepare(`UPDATE ProductImage SET displayOrder = ? WHERE id = ? AND productId = ?`)
+            .bind(index + 1, body.orderedIds[index], id)
+            .run();
+        }
+      } else if (Array.isArray(body.images)) {
+        for (const item of body.images as { id: string; displayOrder?: number; isPrimary?: boolean }[]) {
+          const updates: string[] = [];
+          const paramsArr: any[] = [];
+          if (item.displayOrder !== undefined) {
+            updates.push('displayOrder = ?');
+            paramsArr.push(item.displayOrder);
+          }
+          if (item.isPrimary !== undefined) {
+            updates.push('isPrimary = ?');
+            paramsArr.push(item.isPrimary ? 1 : 0);
+          }
+          if (updates.length > 0) {
+            paramsArr.push(item.id, id);
+            await d1Binding
+              .prepare(`UPDATE ProductImage SET ${updates.join(', ')} WHERE id = ? AND productId = ?`)
+              .bind(...paramsArr)
+              .run();
+          }
+        }
+      } else {
+        return NextResponse.json(
+          { error: 'ข้อมูลสำหรับอัปเดตรูปภาพไม่ถูกต้อง' },
+          { status: 400 }
+        );
+      }
+
+      const updatedImages = await getD1ProductImages(d1Binding, id);
+      return NextResponse.json(updatedImages);
+    }
 
     const product = await prisma.product.findUnique({
       where: { id },
@@ -183,6 +295,40 @@ export async function DELETE(
         { error: 'กรุณาระบุ imageId ที่ต้องการลบ' },
         { status: 400 }
       );
+    }
+
+    const d1Binding = resolveD1Binding();
+    if (d1Binding) {
+      const targetImage = await d1Binding
+        .prepare(`SELECT id, isPrimary FROM ProductImage WHERE id = ? AND productId = ? LIMIT 1`)
+        .bind(imageId, id)
+        .first<any>();
+
+      if (!targetImage) {
+        return NextResponse.json({ error: 'ไม่พบรูปภาพนี้ในสินค้า' }, { status: 404 });
+      }
+
+      const wasPrimary = Boolean(targetImage.isPrimary);
+      await d1Binding
+        .prepare(`DELETE FROM ProductImage WHERE id = ? AND productId = ?`)
+        .bind(imageId, id)
+        .run();
+
+      if (wasPrimary) {
+        const remainingFirst = await d1Binding
+          .prepare(`SELECT id FROM ProductImage WHERE productId = ? ORDER BY displayOrder ASC LIMIT 1`)
+          .bind(id)
+          .first<any>();
+        if (remainingFirst) {
+          await d1Binding
+            .prepare(`UPDATE ProductImage SET isPrimary = 1 WHERE id = ?`)
+            .bind(remainingFirst.id)
+            .run();
+        }
+      }
+
+      const remainingImages = await getD1ProductImages(d1Binding, id);
+      return NextResponse.json(remainingImages);
     }
 
     const targetImage = await prisma.productImage.findFirst({

@@ -237,28 +237,71 @@ body {
   }
 }
 
-/* Print Styles for Packing Slip & Receipts */
+/* Print Styles for Packing Slip & Receipts & Reports */
 @media print {
-  body * {
-    visibility: hidden;
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm;
   }
-  #printable-slip,
-  #printable-slip *,
-  #admin-printable-receipt,
-  #admin-printable-receipt * {
-    visibility: visible;
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-width: 100% !important;
   }
-  #printable-slip {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 16px;
-    background: white !important;
-    color: black !important;
-  }
+
+  /* Hide navigation, sidebar, header, buttons, and decorative elements on print */
+  aside,
+  header,
+  nav,
+  .print\:hidden,
+  [data-print-hidden="true"],
   .no-print {
     display: none !important;
+  }
+
+  /* Reset layout containers for natural document flow */
+  body > div,
+  main {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+  }
+
+  #printable-report {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  #printable-report * {
+    visibility: visible !important;
+    box-shadow: none !important;
+  }
+
+  #printable-slip,
+  #admin-printable-receipt {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 }

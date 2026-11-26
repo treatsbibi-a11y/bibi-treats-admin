@@ -27,6 +27,7 @@ export interface CartItem {
 export type OrderStatus =
   | 'PENDING'
   | 'CONFIRMED'
+  | 'SLIP_UPLOADED'
   | 'PREPARING'
   | 'SHIPPING'
   | 'COMPLETED'
@@ -79,4 +80,31 @@ export interface StoreSettingsData {
   defaultShippingFee: number;
   isStoreOpen: boolean;
   announcement?: string | null;
+}
+
+export type ReviewStatus = 'VISIBLE' | 'HIDDEN';
+
+export interface ReviewItem {
+  id: string;
+  customerName: string;
+  rating: number;
+  comment: string;
+  images: string[];
+  productId?: string | null;
+  productName?: string | null;
+  status: ReviewStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReviewRatingBreakdown {
+  star: 5 | 4 | 3 | 2 | 1;
+  count: number;
+  percentage: number;
+}
+
+export interface ReviewStats {
+  averageRating: number;
+  totalCount: number;
+  breakdown: ReviewRatingBreakdown[];
 }

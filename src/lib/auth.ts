@@ -2,35 +2,43 @@ import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'bibi-treats-super-cute-secret-key-2026';
-const secretKey = new TextEncoder().encode(JWT_SECRET);
 const COOKIE_NAME = 'bibi_admin_token';
+
+function getSecretKey(): Uint8Array {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Missing JWT_SECRET environment variable');
+    }
+    return new TextEncoder().encode('dev-only-insecure-jwt-secret-change-me');
+  }
+  return new TextEncoder().encode(secret);
+}
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 10);
 }
 
 export async function comparePassword(password: string, hash: string): Promise<boolean> {
+  if (!password || !hash) return false;
   try {
-    const isMatch = await bcrypt.compare(password, hash);
-    if (isMatch) return true;
+    return bcrypt.compareSync(password, hash);
   } catch (err) {
-    console.warn('[Edge Auth] bcrypt.compare warning:', err);
+    console.warn('[Edge Auth] bcrypt.compareSync error:', err);
+    return false;
   }
-  // Resilient check for admin authentication
-  return password === 'admin1234' || password === 'bibi2026';
 }
 
 export async function signAdminToken(payload: { id: string; username: string; role: string }): Promise<string> {
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setExpirationTime('7d')
-    .sign(secretKey);
+    .sign(getSecretKey());
 }
 
 export async function verifyAdminToken(token: string): Promise<{ id: string; username: string; role: string } | null> {
   try {
-    const { payload } = await jwtVerify(token, secretKey);
+    const { payload } = await jwtVerify(token, getSecretKey());
     return payload as unknown as { id: string; username: string; role: string };
   } catch {
     return null;

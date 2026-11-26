@@ -23,6 +23,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
 import { showToast } from '@/components/ui/Toast';
+import { useSmartPolling } from '@/hooks/useSmartPolling';
+import { convertImageToWebP } from '@/lib/image-utils';
 import { ProductWithImages } from '@/types';
 
 const CATEGORIES = [
@@ -64,25 +66,28 @@ function ProductsContent() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
 
-  const fetchProducts = async () => {
-    setLoading(true);
+  const fetchProducts = async (silentOrEvent?: boolean | unknown) => {
+    const silent = silentOrEvent === true;
+    if (!silent) setLoading(true);
     try {
-      const res = await fetch('/api/products?all=true');
+      const res = await fetch('/api/products?all=true', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setProducts(data);
       }
     } catch (err) {
       console.error('Failed to fetch products', err);
-      showToast({ title: 'โหลดข้อมูลสินค้าไม่สำเร็จ', variant: 'error' });
+      if (!silent) showToast({ title: 'โหลดข้อมูลสินค้าไม่สำเร็จ', variant: 'error' });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchProducts();
+    fetchProducts(false);
   }, []);
+
+  useSmartPolling(() => fetchProducts(true), 5000);
 
   const openAddModal = () => {
     setFormData({
@@ -162,8 +167,9 @@ function ProductsContent() {
     setUploadingImage(true);
     setImageUploadError(null);
     try {
+      const webpFile = await convertImageToWebP(file);
       const form = new FormData();
-      form.append('file', file);
+      form.append('file', webpFile);
       const res = await fetch('/api/upload', {
         method: 'POST',
         body: form,
@@ -402,13 +408,13 @@ function ProductsContent() {
       sortable: true,
       sortValue: (p) => p.name,
       render: (product) => (
-        <div className="min-w-[190px]">
-          <div className="font-semibold text-ink text-[13px]">{product.name}</div>
+        <div className="min-w-0">
+          <div className="font-semibold text-ink text-[13px] line-clamp-2">{product.name}</div>
           <div className="flex items-center gap-2 mt-1">
             <Badge variant="neutral" size="sm">
               {product.category}
             </Badge>
-            <span className="text-ink-muted text-xs line-clamp-1 max-w-xs">
+            <span className="hidden xl:inline text-ink-muted text-xs line-clamp-1 max-w-xs">
               {product.description}
             </span>
           </div>
@@ -596,7 +602,7 @@ function ProductsContent() {
       </Card>
 
       {/* Mobile Cards (< lg) */}
-      <div className="lg:hidden space-y-2.5">
+      <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-3">
         {filteredProducts.length > 0 ? (
           filteredProducts.map((product) => {
             const primaryImage =
@@ -701,7 +707,7 @@ function ProductsContent() {
             );
           })
         ) : (
-          <Card className="p-8 text-center text-ink-muted text-xs">
+          <Card className="md:col-span-2 p-8 text-center text-ink-muted text-xs">
             {loading ? 'กำลังโหลดรายการสินค้า...' : 'ไม่พบสินค้าตามเงื่อนไขที่ค้นหา'}
           </Card>
         )}
@@ -717,6 +723,7 @@ function ProductsContent() {
           loadingMessage="กำลังโหลดรายการสินค้า..."
           emptyMessage="ไม่พบสินค้าตามเงื่อนไขที่ค้นหา"
           defaultPageSize={10}
+          minWidthClass="min-w-0"
         />
       </div>
 
