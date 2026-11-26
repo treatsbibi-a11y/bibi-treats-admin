@@ -104,10 +104,10 @@ export async function POST(req: NextRequest) {
     });
 
     return response;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Login error:', error);
     return NextResponse.json(
-      { error: 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ' },
+      { error: 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ', details: error?.message || String(error) },
       { status: 500 }
     );
   }
