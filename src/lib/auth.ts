@@ -5,13 +5,7 @@ import { cookies } from 'next/headers';
 const COOKIE_NAME = 'bibi_admin_token';
 
 function getSecretKey(): Uint8Array {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('Missing JWT_SECRET environment variable');
-    }
-    return new TextEncoder().encode('dev-only-insecure-jwt-secret-change-me');
-  }
+  const secret = process.env.JWT_SECRET || 'bibi-treats-super-cute-secret-key-2026';
   return new TextEncoder().encode(secret);
 }
 
