@@ -257,17 +257,19 @@ function ProductsContent() {
   const handleDeleteConfirm = async () => {
     if (!deletingProduct) return;
     setSubmitting(true);
+    const targetProduct = deletingProduct;
     try {
-      const res = await fetch(`/api/products/${deletingProduct.id}`, {
+      const res = await fetch(`/api/products/${targetProduct.id}`, {
         method: 'DELETE',
       });
       if (res.ok) {
-        const deletedName = deletingProduct.name;
         setDeletingProduct(null);
-        showToast({ title: 'ลบเมนูสินค้าแล้ว', description: deletedName, variant: 'success' });
+        setProducts((prev) => prev.filter((p) => p.id !== targetProduct.id));
+        showToast({ title: 'ลบเมนูสินค้าแล้ว', description: targetProduct.name, variant: 'success' });
         fetchProducts();
       } else {
-        showToast({ title: 'ลบสินค้าไม่สำเร็จ', variant: 'error' });
+        const data = await res.json().catch(() => ({}));
+        showToast({ title: data.error || 'ลบสินค้าไม่สำเร็จ', variant: 'error' });
       }
     } catch {
       showToast({ title: 'เกิดข้อผิดพลาดในการลบสินค้า', variant: 'error' });

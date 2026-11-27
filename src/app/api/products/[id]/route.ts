@@ -360,7 +360,7 @@ export async function PUT(
   }
 }
 
-// DELETE /api/products/[id] - soft delete / set status INACTIVE
+// DELETE /api/products/[id] - permanently delete product & related images while preserving order history
 export async function DELETE(
   req: NextRequest,
   { params }: RouteContext
@@ -371,23 +371,35 @@ export async function DELETE(
 
     if (d1Binding) {
       const existing = await d1Binding
-        .prepare(`SELECT id FROM Product WHERE id = ? LIMIT 1`)
+        .prepare(`SELECT id, name FROM Product WHERE id = ? LIMIT 1`)
         .bind(id)
-        .first();
+        .first<{ id: string; name: string }>();
       if (!existing) {
         return NextResponse.json({ error: 'ไม่พบสินค้าที่ต้องการลบ' }, { status: 404 });
       }
 
+      // 1. Unlink OrderItem references (keep order history intact with productName & price)
       await d1Binding
-        .prepare(`UPDATE Product SET status = 'INACTIVE', updatedAt = ? WHERE id = ?`)
-        .bind(new Date().toISOString(), id)
+        .prepare(`UPDATE OrderItem SET productId = NULL WHERE productId = ?`)
+        .bind(id)
         .run();
 
-      const updated = await getD1ProductById(d1Binding, id);
+      // 2. Delete product images
+      await d1Binding
+        .prepare(`DELETE FROM ProductImage WHERE productId = ?`)
+        .bind(id)
+        .run();
+
+      // 3. Delete the product itself
+      await d1Binding
+        .prepare(`DELETE FROM Product WHERE id = ?`)
+        .bind(id)
+        .run();
+
       return NextResponse.json({
         success: true,
-        message: 'สินค้าถูกปิดการขายเรียบร้อยแล้ว (INACTIVE)',
-        product: updated,
+        message: 'ลบสินค้าออกจากระบบเรียบร้อยแล้ว',
+        deletedId: id,
       });
     }
 
@@ -402,30 +414,29 @@ export async function DELETE(
       );
     }
 
-    // Soft delete by setting status to INACTIVE
-    const updated = await prisma.product.update({
-      where: { id },
-      data: {
-        status: 'INACTIVE',
-      },
-      include: {
-        images: {
-          orderBy: {
-            displayOrder: 'asc',
-          },
-        },
-      },
-    });
+    // Unlink OrderItem, delete ProductImages, and delete Product
+    await prisma.$transaction([
+      prisma.orderItem.updateMany({
+        where: { productId: id },
+        data: { productId: null },
+      }),
+      prisma.productImage.deleteMany({
+        where: { productId: id },
+      }),
+      prisma.product.delete({
+        where: { id },
+      }),
+    ]);
 
     return NextResponse.json({
       success: true,
-      message: 'สินค้าถูกปิดการขายเรียบร้อยแล้ว (INACTIVE)',
-      product: updated,
+      message: 'ลบสินค้าออกจากระบบเรียบร้อยแล้ว',
+      deletedId: id,
     });
   } catch (error) {
-    console.error('Error deactivating product:', error);
+    console.error('Error deleting product:', error);
     return NextResponse.json(
-      { error: 'เกิดข้อผิดพลาดในการปิดการขายสินค้า' },
+      { error: 'เกิดข้อผิดพลาดในการลบสินค้า' },
       { status: 500 }
     );
   }
