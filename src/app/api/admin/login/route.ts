@@ -80,6 +80,41 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { username, password } = body;
 
+    // Optional Cloudflare Turnstile bot verification
+    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+    if (turnstileSecret) {
+      const turnstileToken = body.turnstileToken;
+      if (!turnstileToken) {
+        return NextResponse.json(
+          { error: 'กรุณายืนยันการตรวจสอบความปลอดภัย (Turnstile)' },
+          { status: 403 }
+        );
+      }
+      try {
+        const verifyRes = await fetch(
+          'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              secret: turnstileSecret,
+              response: turnstileToken,
+              remoteip: clientIp,
+            }),
+          }
+        );
+        const outcome = (await verifyRes.json()) as any;
+        if (!outcome.success) {
+          return NextResponse.json(
+            { error: 'การตรวจสอบความปลอดภัยไม่ผ่าน กรุณาลองใหม่อีกครั้ง' },
+            { status: 403 }
+          );
+        }
+      } catch (verifyErr) {
+        console.error('Turnstile verification error:', verifyErr);
+      }
+    }
+
     if (!username || !password) {
       return NextResponse.json(
         { error: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' },
