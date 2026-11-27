@@ -143,7 +143,7 @@ export async function getD1Products(options?: {
       params.push(`%${options.search.trim()}%`, `%${options.search.trim()}%`);
     }
 
-    sql += ` GROUP BY p.id ORDER BY p.createdAt DESC`;
+    sql += ` GROUP BY p.id ORDER BY CASE WHEN p.status = 'ACTIVE' THEN 0 ELSE 1 END ASC, p.createdAt DESC`;
 
     const stmt = options.d1Binding.prepare(sql).bind(...params);
     const { results } = await stmt.all<any>();
@@ -193,7 +193,10 @@ export async function getD1Products(options?: {
         orderBy: { displayOrder: 'asc' },
       },
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [
+      { status: 'asc' },
+      { createdAt: 'desc' },
+    ],
   });
 
   return products.map((p) => ({
@@ -713,7 +716,10 @@ export async function getD1Reviews(options?: {
   } else {
     const rows = await prisma.review.findMany({
       where: options?.includeHidden ? undefined : { status: 'VISIBLE' },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [
+      { status: 'asc' },
+      { createdAt: 'desc' },
+    ],
     });
     allRows = rows.map((row) => ({
       id: row.id,

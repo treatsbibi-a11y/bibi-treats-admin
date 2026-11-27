@@ -113,7 +113,7 @@ function ProductsContent() {
 
   const filteredProducts = useMemo(() => {
     const q = search.toLowerCase();
-    return products.filter((p) => {
+    const list = products.filter((p) => {
       const matchSearch =
         !q ||
         p.name.toLowerCase().includes(q) ||
@@ -122,6 +122,16 @@ function ProductsContent() {
         selectedCategory === 'ทั้งหมด' || p.category === selectedCategory;
       const matchStatus = statusFilter === 'ALL' || p.status === statusFilter;
       return matchSearch && matchCategory && matchStatus;
+    });
+
+    return list.sort((a, b) => {
+      // 1. พร้อมขาย (ACTIVE) ขึ้นก่อน ปิดการขาย (INACTIVE) อยู่ล่าง
+      if (a.status === 'ACTIVE' && b.status !== 'ACTIVE') return -1;
+      if (a.status !== 'ACTIVE' && b.status === 'ACTIVE') return 1;
+      // 2. สินค้าสร้างล่าสุดขึ้นก่อน
+      const timeA = new Date(a.createdAt).getTime() || 0;
+      const timeB = new Date(b.createdAt).getTime() || 0;
+      return timeB - timeA;
     });
   }, [products, search, selectedCategory, statusFilter]);
 
