@@ -7,19 +7,22 @@ export function cn(...inputs: ClassValue[]): string {
 
 /**
  * Resolves the User Storefront URL:
- * - On localhost / 127.0.0.1, uses `http://localhost:3000` (or non-localhost env URL if explicitly configured).
- * - In production, uses `NEXT_PUBLIC_STOREFRONT_URL` when configured to a non-localhost URL.
+ * - When viewed on localhost / 127.0.0.1, always navigates to `http://localhost:3000`
+ * - When in production (or on pages.dev / custom domain), navigates to `NEXT_PUBLIC_STOREFRONT_URL` or `https://bibitreats.com`
  */
 export function getStorefrontUrl(): string {
   const envUrl = process.env.NEXT_PUBLIC_STOREFRONT_URL?.trim();
-  const isEnvLocalhost = !envUrl || /localhost|127\.0\.0\.1/i.test(envUrl);
 
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
     if (host === 'localhost' || host === '127.0.0.1') {
-      return isEnvLocalhost ? 'http://localhost:3000' : envUrl;
+      return 'http://localhost:3000';
     }
   }
 
-  return envUrl && !isEnvLocalhost ? envUrl : 'http://localhost:3000';
+  if (envUrl && !/localhost|127\.0\.0\.1/i.test(envUrl)) {
+    return envUrl;
+  }
+
+  return 'https://bibitreats.com';
 }
