@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getD1OrderDetail, CloudflareD1Binding } from '@/lib/d1';
 import { resolveD1Binding } from '@/lib/d1-remote';
+import { getRequestContext } from '@cloudflare/next-on-pages';
+import { notifyOrderStatusUpdatedToLine } from '@/lib/line';
 
 export const dynamic = 'force-dynamic';
 
@@ -236,6 +238,17 @@ async function handleUpdateOrder(req: NextRequest, id: string) {
       }
 
       const updated = await getD1OrderDetail(existingOrder.id, d1Binding);
+      if (newStatus && newStatus !== existingOrder.status && updated) {
+        let runtimeEnv: any = null;
+        try {
+          runtimeEnv = (getRequestContext() as any)?.env;
+        } catch {
+          runtimeEnv = process.env;
+        }
+        await notifyOrderStatusUpdatedToLine(updated, newStatus, runtimeEnv).catch((e) =>
+          console.error('[LINE Notify Error]', e)
+        );
+      }
       return NextResponse.json(updated);
     }
 
@@ -361,6 +374,18 @@ async function handleUpdateOrder(req: NextRequest, id: string) {
         },
       });
     });
+
+    if (newStatus && newStatus !== existingOrder.status && updatedOrder) {
+      let runtimeEnv: any = null;
+      try {
+        runtimeEnv = (getRequestContext() as any)?.env;
+      } catch {
+        runtimeEnv = process.env;
+      }
+      await notifyOrderStatusUpdatedToLine(updatedOrder as any, newStatus, runtimeEnv).catch((e) =>
+        console.error('[LINE Notify Error]', e)
+      );
+    }
 
     return NextResponse.json(updatedOrder);
   } catch (error: unknown) {
