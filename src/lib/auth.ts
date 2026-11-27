@@ -32,7 +32,9 @@ export async function signAdminToken(payload: { id: string; username: string; ro
 
 export async function verifyAdminToken(token: string): Promise<{ id: string; username: string; role: string } | null> {
   try {
-    const { payload } = await jwtVerify(token, getSecretKey());
+    const { payload } = await jwtVerify(token, getSecretKey(), {
+      algorithms: ['HS256'],
+    });
     return payload as unknown as { id: string; username: string; role: string };
   } catch {
     return null;

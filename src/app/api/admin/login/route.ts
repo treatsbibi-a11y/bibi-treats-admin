@@ -6,6 +6,40 @@ import { resolveD1Binding } from '@/lib/d1-remote';
 
 export const dynamic = 'force-dynamic';
 
+// Lightweight per-isolate sliding-window rate limiter for failed logins
+const LOGIN_WINDOW_MS = 5 * 60 * 1000;
+const MAX_FAILED_ATTEMPTS = 15;
+const failedAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function getClientIp(req: NextRequest): string {
+  return (
+    req.headers.get('cf-connecting-ip') ||
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    'unknown'
+  );
+}
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = failedAttempts.get(ip);
+  if (!entry) return false;
+  if (now > entry.resetAt) {
+    failedAttempts.delete(ip);
+    return false;
+  }
+  return entry.count >= MAX_FAILED_ATTEMPTS;
+}
+
+function recordFailedAttempt(ip: string): void {
+  const now = Date.now();
+  const entry = failedAttempts.get(ip);
+  if (!entry || now > entry.resetAt) {
+    failedAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+  } else {
+    entry.count += 1;
+  }
+}
+
 // GET /api/admin/login - check authentication status
 export async function GET(req: NextRequest) {
   try {
@@ -35,6 +69,14 @@ export async function GET(req: NextRequest) {
 // POST /api/admin/login - verify username/password, generate JWT, set httpOnly cookie bibi_admin_token
 export async function POST(req: NextRequest) {
   try {
+    const clientIp = getClientIp(req);
+    if (isRateLimited(clientIp)) {
+      return NextResponse.json(
+        { error: 'มีการพยายามเข้าสู่ระบบผิดพลาดหลายครั้ง กรุณารอสักครู่แล้วลองใหม่' },
+        { status: 429, headers: { 'Retry-After': '300' } }
+      );
+    }
+
     const body = await req.json();
     const { username, password } = body;
 
@@ -60,6 +102,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!admin) {
+      recordFailedAttempt(clientIp);
       return NextResponse.json(
         { error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' },
         { status: 401 }
@@ -68,11 +111,14 @@ export async function POST(req: NextRequest) {
 
     const isMatch = await comparePassword(String(password), admin.passwordHash);
     if (!isMatch) {
+      recordFailedAttempt(clientIp);
       return NextResponse.json(
         { error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' },
         { status: 401 }
       );
     }
+
+    failedAttempts.delete(clientIp);
 
     // Generate JWT token
     const token = await signAdminToken({
