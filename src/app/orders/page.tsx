@@ -470,7 +470,17 @@ function OrdersContent() {
   ];
 
   const currentStatusMeta = selectedOrder
-    ? ORDER_STATUS_LIST.find((c) => c.status === selectedOrder.status) || ORDER_STATUS_LIST[0]
+    ? (() => {
+        const meta =
+          ORDER_STATUS_LIST.find((c) => c.status === selectedOrder.status) || ORDER_STATUS_LIST[0];
+        if (selectedOrder.paymentMethod === 'COD' && selectedOrder.status === 'CONFIRMED') {
+          return {
+            ...meta,
+            label: 'ร้านยืนยันแล้ว / เตรียมจัดส่ง',
+          };
+        }
+        return meta;
+      })()
     : ORDER_STATUS_LIST[0];
 
   return (
@@ -1225,7 +1235,12 @@ function OrdersContent() {
                     เลือกสถานะออเดอร์
                   </div>
                   <div className="py-1">
-                    {ORDER_STATUS_LIST.map((opt) => {
+                    {(selectedOrder.paymentMethod === 'COD'
+                      ? ORDER_STATUS_LIST.filter(
+                          (opt) => opt.status !== 'CONFIRMED' && opt.status !== 'SLIP_UPLOADED'
+                        )
+                      : ORDER_STATUS_LIST
+                    ).map((opt) => {
                       const isSelected = selectedOrder.status === opt.status;
                       return (
                         <button
