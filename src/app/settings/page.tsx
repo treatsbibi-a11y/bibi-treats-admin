@@ -12,6 +12,8 @@ import {
   faTrashCan,
   faMobileScreen,
   faCakeCandles,
+  faShieldHalved,
+  faLock,
 } from '@fortawesome/free-solid-svg-icons';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -40,19 +42,93 @@ export default function AdminSettingsPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingQr, setUploadingQr] = useState(false);
 
+  // Admin Account & Security State
+  const [accountUsername, setAccountUsername] = useState('admin');
+  const [accountForm, setAccountForm] = useState({
+    newUsername: '',
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [savingAccount, setSavingAccount] = useState(false);
+
   const fetchSettings = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/settings');
+      const [res, accRes] = await Promise.all([
+        fetch('/api/admin/settings'),
+        fetch('/api/admin/account'),
+      ]);
       if (res.ok) {
         const data = await res.json();
         setSettings(data);
+      }
+      if (accRes.ok) {
+        const accData = await accRes.json();
+        if (accData.username) {
+          setAccountUsername(accData.username);
+          setAccountForm((prev) => ({ ...prev, newUsername: accData.username }));
+        }
       }
     } catch (err) {
       console.error('Failed to load settings', err);
       showToast({ title: 'โหลดการตั้งค่าไม่สำเร็จ', variant: 'error' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAccountSubmit = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!accountForm.currentPassword) {
+      showToast({ title: 'กรุณากรอกรหัสผ่านปัจจุบันเพื่อยืนยันตัวตน', variant: 'error' });
+      return;
+    }
+    if (accountForm.newPassword && accountForm.newPassword.length < 6) {
+      showToast({ title: 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร', variant: 'error' });
+      return;
+    }
+    if (accountForm.newPassword && accountForm.newPassword !== accountForm.confirmPassword) {
+      showToast({ title: 'รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน', variant: 'error' });
+      return;
+    }
+
+    setSavingAccount(true);
+    try {
+      const res = await fetch('/api/admin/account', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: accountForm.currentPassword,
+          newUsername: accountForm.newUsername.trim() || undefined,
+          newPassword: accountForm.newPassword.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'เปลี่ยนข้อมูลบัญชีไม่สำเร็จ');
+      }
+
+      showToast({
+        title: 'อัปเดตข้อมูลบัญชีสำเร็จ',
+        description: `ชื่อผู้ใช้: ${data.admin?.username}`,
+        variant: 'success',
+      });
+      setAccountUsername(data.admin?.username || accountForm.newUsername);
+      setAccountForm({
+        newUsername: data.admin?.username || accountForm.newUsername,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+    } catch (err: any) {
+      showToast({
+        title: err.message || 'เกิดข้อผิดพลาดในการอัปเดตบัญชี',
+        variant: 'error',
+      });
+    } finally {
+      setSavingAccount(false);
     }
   };
 
@@ -523,6 +599,92 @@ export default function AdminSettingsPage() {
                 <p className="text-[11px] text-ink-muted mt-1.5">
                   ระบบจะคำนวณบวกค่าจัดส่งนี้เข้าไปในทุกคำสั่งซื้อโดยอัตโนมัติ
                 </p>
+              </CardBody>
+            </Card>
+
+            {/* Section 4: Admin Account & Security */}
+            <Card>
+              <CardHeader className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FontAwesomeIcon icon={faShieldHalved} className="w-4 h-4 text-primary-text" />
+                  <h2 className="text-[15px] font-semibold text-ink">
+                    ความปลอดภัยและบัญชีผู้ดูแลระบบ
+                  </h2>
+                </div>
+                <span className="text-[11px] font-mono text-ink-muted bg-surface-secondary px-2 py-0.5 rounded border border-surface-border">
+                  {accountUsername}
+                </span>
+              </CardHeader>
+
+              <CardBody className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-ink-secondary mb-1">
+                      ชื่อผู้ใช้แอดมิน (Username)
+                    </label>
+                    <input
+                      type="text"
+                      value={accountForm.newUsername}
+                      onChange={(e) => setAccountForm({ ...accountForm, newUsername: e.target.value })}
+                      placeholder="เช่น admin, shop_owner"
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-ink-secondary mb-1">
+                      รหัสผ่านปัจจุบัน (Current Password) *
+                    </label>
+                    <input
+                      type="password"
+                      value={accountForm.currentPassword}
+                      onChange={(e) => setAccountForm({ ...accountForm, currentPassword: e.target.value })}
+                      placeholder="ระบุรหัสผ่านเดิมเพื่อยืนยัน"
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-surface-border-light">
+                  <div>
+                    <label className="block text-xs font-semibold text-ink-secondary mb-1">
+                      รหัสผ่านใหม่ (New Password)
+                    </label>
+                    <input
+                      type="password"
+                      value={accountForm.newPassword}
+                      onChange={(e) => setAccountForm({ ...accountForm, newPassword: e.target.value })}
+                      placeholder="อย่างน้อย 6 ตัวอักษร (เว้นว่างไว้หากไม่เปลี่ยน)"
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-ink-secondary mb-1">
+                      ยืนยันรหัสผ่านใหม่ (Confirm Password)
+                    </label>
+                    <input
+                      type="password"
+                      value={accountForm.confirmPassword}
+                      onChange={(e) => setAccountForm({ ...accountForm, confirmPassword: e.target.value })}
+                      placeholder="กรอกรหัสผ่านใหม่อีกครั้ง"
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    isLoading={savingAccount}
+                    onClick={handleAccountSubmit}
+                  >
+                    <FontAwesomeIcon icon={faLock} className="w-3.5 h-3.5" />
+                    <span>อัปเดตข้อมูลความปลอดภัย</span>
+                  </Button>
+                </div>
               </CardBody>
             </Card>
           </div>
