@@ -48,6 +48,13 @@ export const ORDER_STATUS_MAP: Record<
   },
 };
 
+export function getOrderStatusLabel(status: OrderStatus, paymentMethod?: string): string {
+  if (paymentMethod === 'COD' && status === 'CONFIRMED') {
+    return 'ร้านยืนยันแล้ว / ปลายทาง';
+  }
+  return ORDER_STATUS_MAP[status]?.label || status;
+}
+
 export function formatPrice(amount: number): string {
   // Formats price in Thai locale for UI consistency
   return new Intl.NumberFormat('th-TH', {

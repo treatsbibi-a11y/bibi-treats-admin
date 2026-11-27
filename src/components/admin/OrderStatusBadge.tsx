@@ -94,9 +94,11 @@ export const ORDER_STATUS_LIST: OrderStatusMeta[] = [
 export function OrderStatusBadge({
   status,
   size = 'sm',
+  paymentMethod,
 }: {
   status: OrderStatus | string;
   size?: 'sm' | 'md';
+  paymentMethod?: string;
 }) {
   const meta = ORDER_STATUS_META[status as OrderStatus];
   if (!meta) {
@@ -106,9 +108,15 @@ export function OrderStatusBadge({
       </Badge>
     );
   }
+
+  const label =
+    paymentMethod === 'COD' && status === 'CONFIRMED'
+      ? 'ร้านยืนยันแล้ว / เตรียมจัดส่ง'
+      : meta.label;
+
   return (
     <Badge variant={meta.variant} size={size}>
-      {meta.label}
+      {label}
     </Badge>
   );
 }

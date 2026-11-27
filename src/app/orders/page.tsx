@@ -357,7 +357,7 @@ function OrdersContent() {
       align: 'center',
       sortable: true,
       sortValue: (o) => o.status,
-      render: (order) => <OrderStatusBadge status={order.status} />,
+      render: (order) => <OrderStatusBadge status={order.status} paymentMethod={order.paymentMethod} />,
     },
     {
       key: 'actions',
@@ -373,11 +373,14 @@ function OrdersContent() {
                 disabled={updatingStatus}
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleUpdateStatus(order.id, 'CONFIRMED');
+                  handleUpdateStatus(
+                    order.id,
+                    order.paymentMethod === 'COD' ? 'PREPARING' : 'CONFIRMED'
+                  );
                 }}
                 className="bg-semantic-green hover:opacity-90 border-transparent"
               >
-                <span>ยืนยัน</span>
+                <span>{order.paymentMethod === 'COD' ? 'ยืนยัน & เตรียมของ' : 'ยืนยัน'}</span>
               </Button>
               <Button
                 variant="danger"
@@ -391,6 +394,21 @@ function OrdersContent() {
                 <span>ปฏิเสธ</span>
               </Button>
             </>
+          )}
+
+          {order.status === 'CONFIRMED' && order.paymentMethod === 'COD' && (
+            <Button
+              variant="primary"
+              size="xs"
+              disabled={updatingStatus}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleUpdateStatus(order.id, 'PREPARING');
+              }}
+            >
+              <FontAwesomeIcon icon={faKitchenSet} className="w-3 h-3" />
+              <span>กำลังเตรียมสินค้า</span>
+            </Button>
           )}
 
           {order.status === 'SLIP_UPLOADED' && (
@@ -670,11 +688,14 @@ function OrdersContent() {
                         disabled={updatingStatus}
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleUpdateStatus(order.id, 'CONFIRMED');
+                          handleUpdateStatus(
+                            order.id,
+                            order.paymentMethod === 'COD' ? 'PREPARING' : 'CONFIRMED'
+                          );
                         }}
                         className="w-full bg-semantic-green hover:opacity-90 border-transparent"
                       >
-                        <span>✅ ยืนยันออเดอร์</span>
+                        <span>{order.paymentMethod === 'COD' ? '✅ ยืนยัน & เตรียมของ' : '✅ ยืนยันออเดอร์'}</span>
                       </Button>
                       <Button
                         variant="danger"
@@ -689,6 +710,22 @@ function OrdersContent() {
                         <span>❌ ปฏิเสธออเดอร์</span>
                       </Button>
                     </div>
+                  )}
+
+                  {order.status === 'CONFIRMED' && order.paymentMethod === 'COD' && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={updatingStatus}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleUpdateStatus(order.id, 'PREPARING');
+                      }}
+                      className="w-full"
+                    >
+                      <FontAwesomeIcon icon={faKitchenSet} className="w-3.5 h-3.5" />
+                      <span>กำลังเตรียมสินค้า</span>
+                    </Button>
                   )}
 
                   {order.status === 'SLIP_UPLOADED' && (
@@ -844,10 +881,15 @@ function OrdersContent() {
                       variant="primary"
                       size="sm"
                       disabled={updatingStatus}
-                      onClick={() => handleUpdateStatus(selectedOrder.id, 'CONFIRMED')}
+                      onClick={() =>
+                        handleUpdateStatus(
+                          selectedOrder.id,
+                          selectedOrder.paymentMethod === 'COD' ? 'PREPARING' : 'CONFIRMED'
+                        )
+                      }
                       className="bg-semantic-green hover:opacity-90 border-transparent"
                     >
-                      <span>ยืนยันออเดอร์</span>
+                      <span>{selectedOrder.paymentMethod === 'COD' ? 'ยืนยัน & เตรียมของ' : 'ยืนยันออเดอร์'}</span>
                     </Button>
                   </>
                 )}
@@ -860,7 +902,11 @@ function OrdersContent() {
                   >
                     <FontAwesomeIcon icon={faKitchenSet} className="w-3.5 h-3.5" />
                     <span>
-                      {selectedOrder.slipUrl ? 'ตรวจสลิปแล้ว · กำลังเตรียมสินค้า' : 'กำลังเตรียมสินค้า'}
+                      {selectedOrder.paymentMethod === 'COD'
+                        ? 'กำลังเตรียมสินค้า'
+                        : selectedOrder.slipUrl
+                        ? 'ตรวจสลิปแล้ว · กำลังเตรียมสินค้า'
+                        : 'กำลังเตรียมสินค้า'}
                     </span>
                   </Button>
                 )}
@@ -921,7 +967,7 @@ function OrdersContent() {
         {selectedOrder && (
           <div className="space-y-4 text-xs">
             {/* Highlight Slip Verification Banner for SLIP_UPLOADED Orders */}
-            {selectedOrder.status === 'SLIP_UPLOADED' && (
+            {selectedOrder.status === 'SLIP_UPLOADED' && selectedOrder.paymentMethod !== 'COD' && (
               <div className="p-3.5 rounded bg-semantic-blue-lt border border-semantic-blue/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   {selectedOrder.slipUrl ? (
@@ -976,6 +1022,37 @@ function OrdersContent() {
               </div>
             )}
 
+            {/* Informational Banner for Cash on Delivery (COD) */}
+            {selectedOrder.paymentMethod === 'COD' && selectedOrder.status !== 'CANCELLED' && selectedOrder.status !== 'COMPLETED' && (
+              <div className="p-3.5 rounded bg-sky-500/10 border border-sky-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
+                    <FontAwesomeIcon icon={faTruck} className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="font-semibold text-sky-300 text-[13px]">
+                      📦 ชำระเงินปลายทาง (COD) · รอเก็บเงินสดเมื่อจัดส่งถึงผู้รับ
+                    </div>
+                    <p className="text-[11px] text-ink-secondary font-mono-num">
+                      ยอดเก็บเงินปลายทาง: ฿{(selectedOrder.total ?? 0).toLocaleString()} (ไม่ต้องตรวจสลิป)
+                    </p>
+                  </div>
+                </div>
+                {(selectedOrder.status === 'PENDING' || selectedOrder.status === 'CONFIRMED') && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={updatingStatus}
+                    onClick={() => handleUpdateStatus(selectedOrder.id, 'PREPARING')}
+                    className="shrink-0"
+                  >
+                    <FontAwesomeIcon icon={faKitchenSet} className="w-3.5 h-3.5" />
+                    <span>กำลังเตรียมสินค้า</span>
+                  </Button>
+                )}
+              </div>
+            )}
+
             {/* Pipeline & Status Switcher */}
             <div className="p-3.5 rounded bg-surface-secondary border border-surface-border-light space-y-3">
               {selectedOrder.status === 'CANCELLED' ? (
@@ -984,6 +1061,63 @@ function OrdersContent() {
                   <span className="text-[11px]">
                     สามารถเปลี่ยนสถานะเพื่อนำกลับมาดำเนินการต่อได้
                   </span>
+                </div>
+              ) : selectedOrder.paymentMethod === 'COD' ? (
+                <div>
+                  <div className="flex items-center justify-between text-[11px] text-ink-muted mb-2">
+                    <span className="uppercase tracking-wider font-mono text-[10px]">
+                      ขั้นตอนคำสั่งซื้อ (เก็บเงินปลายทาง)
+                    </span>
+                    <span className="text-ink font-semibold">
+                      {selectedOrder.status === 'PENDING' && '1/4: รอร้านยืนยัน'}
+                      {(selectedOrder.status === 'CONFIRMED' || selectedOrder.status === 'SLIP_UPLOADED' || selectedOrder.status === 'PREPARING') && '2/4: กำลังเตรียมสินค้า'}
+                      {selectedOrder.status === 'SHIPPING' && '3/4: กำลังจัดส่ง'}
+                      {selectedOrder.status === 'COMPLETED' && '4/4: เสร็จสิ้น (เก็บเงินสำเร็จ)'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { key: 'PENDING', label: 'รอยืนยัน' },
+                      { key: 'PREPARING', label: 'เตรียมสินค้า' },
+                      { key: 'SHIPPING', label: 'จัดส่ง' },
+                      { key: 'COMPLETED', label: 'เสร็จสิ้น' },
+                    ].map((step, idx) => {
+                      const codStepOrder = ['PENDING', 'PREPARING', 'SHIPPING', 'COMPLETED'];
+                      let normalizedStatus = selectedOrder.status;
+                      if (normalizedStatus === 'CONFIRMED' || normalizedStatus === 'SLIP_UPLOADED') {
+                        normalizedStatus = 'PREPARING';
+                      }
+                      const currentIdx = codStepOrder.indexOf(normalizedStatus);
+                      const isPastOrCurrent = currentIdx >= idx;
+                      const isCurrent = currentIdx === idx;
+
+                      return (
+                        <div key={step.key} className="flex flex-col gap-1 min-w-0">
+                          <div
+                            className={`h-1.5 rounded-full transition-colors ${
+                              isCurrent
+                                ? 'bg-primary'
+                                : isPastOrCurrent
+                                ? 'bg-semantic-green'
+                                : 'bg-surface-border'
+                            }`}
+                          />
+                          <div
+                            className={`text-[10px] text-center truncate ${
+                              isCurrent
+                                ? 'font-semibold text-ink'
+                                : isPastOrCurrent
+                                ? 'text-ink-secondary font-medium'
+                                : 'text-ink-muted'
+                            }`}
+                          >
+                            {step.label}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
                 <div>
