@@ -2,6 +2,11 @@ import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 
+// Edge Runtime polyfill for setImmediate to prevent Node.js API warnings
+if (typeof (globalThis as any).setImmediate === 'undefined') {
+  (globalThis as any).setImmediate = (fn: (...args: any[]) => void, ...args: any[]) => setTimeout(fn, 0, ...args);
+}
+
 const COOKIE_NAME = 'bibi_admin_token';
 
 function getSecretKey(): Uint8Array {
@@ -10,7 +15,7 @@ function getSecretKey(): Uint8Array {
 }
 
 export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 10);
+  return bcrypt.hashSync(password, 10);
 }
 
 export async function comparePassword(password: string, hash: string): Promise<boolean> {
