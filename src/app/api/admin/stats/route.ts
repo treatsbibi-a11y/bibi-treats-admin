@@ -117,6 +117,34 @@ export async function GET(req: NextRequest) {
     // Recent Orders (Top 10)
     const recentOrders = allOrders.slice(0, 10);
 
+    // Kitchen Prep Summary (Active orders waiting to be prepared/baked: CONFIRMED, SLIP_UPLOADED, PREPARING)
+    const activePrepOrders = allOrders.filter(o =>
+      ['CONFIRMED', 'SLIP_UPLOADED', 'PREPARING'].includes(o.status)
+    );
+
+    const prepMap = new Map<string, { name: string; quantity: number; orderCount: number }>();
+    for (const order of activePrepOrders) {
+      if (!order.items || !Array.isArray(order.items)) continue;
+      for (const item of order.items) {
+        const name = (item.productName || item.product?.name || 'ขนมไม่ระบุชื่อ').trim();
+        const qty = Number(item.quantity) || 1;
+        if (!prepMap.has(name)) {
+          prepMap.set(name, { name, quantity: 0, orderCount: 0 });
+        }
+        const entry = prepMap.get(name)!;
+        entry.quantity += qty;
+        entry.orderCount += 1;
+      }
+    }
+    const kitchenPrepItems = Array.from(prepMap.values()).sort((a, b) => b.quantity - a.quantity);
+    const totalKitchenPrepQuantity = kitchenPrepItems.reduce((sum, i) => sum + i.quantity, 0);
+
+    const kitchenPrep = {
+      totalItems: totalKitchenPrepQuantity,
+      totalOrders: activePrepOrders.length,
+      items: kitchenPrepItems,
+    };
+
     return NextResponse.json({
       totalOrders,
       todayOrders,
@@ -131,6 +159,8 @@ export async function GET(req: NextRequest) {
       monthlyChart,
       bestSellers,
       recentOrders,
+      allOrders,
+      kitchenPrep,
       overview: {
         totalOrders,
         todayOrders,

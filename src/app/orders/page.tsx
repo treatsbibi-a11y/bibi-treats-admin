@@ -33,6 +33,7 @@ import { downloadImageAsJpeg } from '@/lib/image-utils';
 import { OrderStatusBadge, ORDER_STATUS_LIST } from '@/components/admin/OrderStatusBadge';
 import OrderReceiptModal from '@/components/admin/OrderReceiptModal';
 import ShopQrModal, { ShopPaymentInfo } from '@/components/admin/ShopQrModal';
+import KitchenPrepModal from '@/components/admin/KitchenPrepModal';
 import { OrderDetail, OrderStatus } from '@/types';
 
 const STATUS_TABS: { key: string; label: string }[] = [
@@ -73,6 +74,7 @@ function OrdersContent() {
   const [cancelModalOrder, setCancelModalOrder] = useState<OrderDetail | null>(null);
   const [viewingSlipUrl, setViewingSlipUrl] = useState<string | null>(null);
   const [showShopQrModal, setShowShopQrModal] = useState(false);
+  const [showKitchenPrepModal, setShowKitchenPrepModal] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [viewingReceiptOrder, setViewingReceiptOrder] = useState<OrderDetail | null>(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
@@ -493,13 +495,24 @@ function OrdersContent() {
           </h1>
         </div>
 
-        <Button variant="outline" size="sm" onClick={fetchOrders} disabled={loading}>
-          <FontAwesomeIcon
-            icon={faRotate}
-            className={`w-3.5 h-3.5 text-ink-muted ${loading ? 'animate-spin' : ''}`}
-          />
-          <span>รีเฟรชข้อมูล</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setShowKitchenPrepModal(true)}
+            className="gap-1.5 shadow-sm"
+          >
+            <FontAwesomeIcon icon={faKitchenSet} className="w-3.5 h-3.5" />
+            <span>สรุปยอดเตรียมของ (Kitchen Sheet)</span>
+          </Button>
+          <Button variant="outline" size="sm" onClick={fetchOrders} disabled={loading}>
+            <FontAwesomeIcon
+              icon={faRotate}
+              className={`w-3.5 h-3.5 text-ink-muted ${loading ? 'animate-spin' : ''}`}
+            />
+            <span>รีเฟรชข้อมูล</span>
+          </Button>
+        </div>
       </div>
 
       {/* Filter Tabs & Search Card */}
@@ -1536,6 +1549,13 @@ function OrdersContent() {
         onClose={() => setShowShopQrModal(false)}
         shopSettings={shopSettings}
         selectedOrder={selectedOrder}
+      />
+
+      {/* Kitchen Prep Modal */}
+      <KitchenPrepModal
+        isOpen={showKitchenPrepModal}
+        onClose={() => setShowKitchenPrepModal(false)}
+        orders={orders}
       />
     </div>
   );

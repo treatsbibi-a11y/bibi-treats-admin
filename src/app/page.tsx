@@ -19,6 +19,7 @@ import {
   faTriangleExclamation,
   faUtensils,
   faDownload,
+  faKitchenSet,
 } from '@fortawesome/free-solid-svg-icons';
 import { faInstagram } from '@fortawesome/free-brands-svg-icons';
 import { Card, CardBody, CardHeader, CardFooter } from '@/components/ui/Card';
@@ -28,6 +29,7 @@ import { useSmartPolling } from '@/hooks/useSmartPolling';
 import { Modal } from '@/components/ui/Modal';
 import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
 import { OrderStatusBadge } from '@/components/admin/OrderStatusBadge';
+import KitchenPrepModal from '@/components/admin/KitchenPrepModal';
 import { downloadImageAsJpeg } from '@/lib/image-utils';
 import type { SalesChartPoint } from '@/components/charts/SalesAreaChart';
 import { OrderDetail } from '@/types';
@@ -55,6 +57,16 @@ interface BestSellerItem {
   stock: number;
 }
 
+interface KitchenPrepSummary {
+  totalItems: number;
+  totalOrders: number;
+  items: {
+    name: string;
+    quantity: number;
+    orderCount: number;
+  }[];
+}
+
 interface AdminStats {
   totalOrders: number;
   todayOrders: number;
@@ -69,6 +81,8 @@ interface AdminStats {
   monthlyChart: SalesChartPoint[];
   bestSellers: BestSellerItem[];
   recentOrders: OrderDetail[];
+  allOrders?: OrderDetail[];
+  kitchenPrep?: KitchenPrepSummary;
 }
 
 export default function AdminDashboardPage() {
@@ -77,6 +91,7 @@ export default function AdminDashboardPage() {
   const [chartView, setChartView] = useState<'daily' | '7days' | 'monthly'>('7days');
   const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null);
   const [viewingSlipUrl, setViewingSlipUrl] = useState<string | null>(null);
+  const [showKitchenPrepModal, setShowKitchenPrepModal] = useState(false);
 
   const fetchStats = async (silentOrEvent?: boolean | unknown) => {
     const silent = silentOrEvent === true;
@@ -232,11 +247,20 @@ export default function AdminDashboardPage() {
             />
             <span>รีเฟรช</span>
           </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setShowKitchenPrepModal(true)}
+            className="gap-1.5 shadow-sm text-xs"
+          >
+            <FontAwesomeIcon icon={faKitchenSet} className="w-3.5 h-3.5" />
+            <span>ใบเตรียมของ (Kitchen Sheet)</span>
+          </Button>
           <Link
             href="/orders"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 h-8 rounded bg-primary hover:bg-primary-dk text-white text-xs font-medium shadow-subtle transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 h-8 rounded bg-surface hover:bg-surface-secondary text-ink border border-surface-border text-xs font-medium shadow-subtle transition-colors"
           >
-            <FontAwesomeIcon icon={faBagShopping} className="w-3.5 h-3.5" />
+            <FontAwesomeIcon icon={faBagShopping} className="w-3.5 h-3.5 text-ink-muted" />
             <span>จัดการออเดอร์</span>
           </Link>
         </div>
@@ -508,6 +532,77 @@ export default function AdminDashboardPage() {
           </CardFooter>
         </Card>
       </div>
+
+      {/* Today's Bake & Kitchen Prep Widget */}
+      <Card className="border border-surface-border overflow-hidden">
+        <div className="p-4 bg-surface-secondary/50 border-b border-surface-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+              <FontAwesomeIcon icon={faKitchenSet} className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-[15px] font-semibold text-ink">
+                  ยอดขนมที่ต้องเตรียม / อบเข้าเตา (Kitchen Prep Queue)
+                </h2>
+                <Badge variant={stats?.kitchenPrep?.totalItems ? 'primary' : 'neutral'} size="sm">
+                  {stats?.kitchenPrep?.totalItems ?? 0} ชิ้นที่ต้องทำ
+                </Badge>
+              </div>
+              <p className="text-xs text-ink-muted mt-0.5">
+                รวมยอดจากออเดอร์ที่ยืนยันแล้ว ({stats?.kitchenPrep?.totalOrders ?? 0} คำสั่งซื้อ) พร้อมเข้าเตาอบและจัดแพ็ก
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setShowKitchenPrepModal(true)}
+              className="gap-1.5 shadow-sm text-xs"
+            >
+              <FontAwesomeIcon icon={faReceipt} className="w-3.5 h-3.5" />
+              <span>เปิดใบเตรียมของ & พิมพ์</span>
+            </Button>
+          </div>
+        </div>
+
+        <CardBody className="p-4">
+          {!stats?.kitchenPrep?.items || stats.kitchenPrep.items.length === 0 ? (
+            <div className="py-6 text-center text-xs text-ink-muted flex flex-col items-center justify-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-surface-secondary flex items-center justify-center text-ink-muted/60">
+                <FontAwesomeIcon icon={faKitchenSet} className="w-4 h-4" />
+              </div>
+              <span>ขณะนี้ยังไม่มีขนมที่ค้างเตรียมหรือต้องเข้าเตาอบ ทุกออเดอร์ได้รับการเตรียมเรียบร้อยแล้ว</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {stats.kitchenPrep.items.map((item, idx) => (
+                <div
+                  key={item.name}
+                  className="p-3 rounded-lg bg-surface-secondary/70 border border-surface-border-light flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <span className="text-xs text-ink-muted font-mono block">#{idx + 1}</span>
+                    <h4 className="text-sm font-semibold text-ink truncate mt-0.5" title={item.name}>
+                      {item.name}
+                    </h4>
+                    <span className="text-[11px] text-ink-muted">
+                      จาก {item.orderCount} ออเดอร์
+                    </span>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-sm font-bold bg-primary/15 text-primary border border-primary/25">
+                      x{item.quantity}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardBody>
+      </Card>
 
       {/* Recent Orders Section */}
       <div className="space-y-3">
@@ -810,6 +905,13 @@ export default function AdminDashboardPage() {
           </div>
         )}
       </Modal>
+
+      {/* Kitchen Prep Modal */}
+      <KitchenPrepModal
+        isOpen={showKitchenPrepModal}
+        onClose={() => setShowKitchenPrepModal(false)}
+        orders={stats?.allOrders || stats?.recentOrders || []}
+      />
     </div>
   );
 }
