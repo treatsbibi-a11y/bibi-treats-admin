@@ -18,14 +18,12 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/components/theme/ThemeProvider';
 import { getStorefrontUrl } from '@/lib/utils';
-import { Turnstile } from '@marsidev/react-turnstile';
 
 export default function AdminLoginPage() {
   const router = useRouter();
   const { resolvedTheme, toggleTheme } = useTheme();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [turnstileToken, setTurnstileToken] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +62,6 @@ export default function AdminLoginPage() {
         body: JSON.stringify({
           username: username.trim(),
           password: password.trim(),
-          turnstileToken: turnstileToken || undefined,
         }),
       });
 
@@ -193,20 +190,6 @@ export default function AdminLoginPage() {
               </button>
             </div>
           </div>
-
-          {/* Cloudflare Turnstile */}
-          {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && (
-            <div className="pt-1 pb-1 flex justify-center">
-              <Turnstile
-                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-                onSuccess={(token) => setTurnstileToken(token)}
-                options={{
-                  theme: resolvedTheme === 'dark' ? 'dark' : 'light',
-                  size: 'flexible',
-                }}
-              />
-            </div>
-          )}
 
           <Button
             type="submit"
